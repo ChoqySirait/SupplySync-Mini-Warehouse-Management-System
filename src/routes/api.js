@@ -7,7 +7,7 @@ const stockController = require('../controllers/stockController');
 router.get('/products', productController.getAllProducts);
 router.get('/batches/fifo', productController.getFifoBatches);
 
-// Routes Transaksi Stok & Audit Log
+// Routes Transaksi Stok & Audit Log (PASTIKAN DUA BARIS INI ADA)
 router.post('/stock/in', stockController.addStockBatch);
 router.post('/stock/out', stockController.reduceStockFifo);
 router.get('/transactions', stockController.getTransactionLogs);
