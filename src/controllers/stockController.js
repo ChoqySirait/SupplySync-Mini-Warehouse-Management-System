@@ -1,6 +1,45 @@
 const db = require('../config/database');
 
-// Logika Pengeluaran Barang Otomatis Memotong Batch Expired Terdekat (Auto-FIFO Engine)
+// 1. Penerimaan Barang Masuk / Tambah Batch Baru (Stock In)
+exports.addStockBatch = async (req, res) => {
+    const connection = await db.getConnection();
+    try {
+        const { product_id, quantity, expired_date, user_id, notes } = req.body;
+
+        if (!product_id || !quantity || !expired_date) {
+            return res.status(400).json({ status: 'Error', message: 'Data produk, jumlah, dan tanggal expired wajib diisi.' });
+        }
+
+        await connection.beginTransaction();
+
+        // Insert batch baru
+        const today = new Date().toISOString().split('T')[0];
+        await connection.query(
+            `INSERT INTO inventory_batches (product_id, quantity, expired_date, received_date) 
+             VALUES (?, ?, ?, ?)`,
+            [product_id, quantity, expired_date, today]
+        );
+
+        // Catat Audit Log
+        await connection.query(
+            `INSERT INTO stock_transactions (product_id, user_id, transaction_type, quantity, notes) 
+             VALUES (?, ?, 'IN', ?, ?)`,
+            [product_id, user_id || 1, quantity, notes || 'Penerimaan batch barang masuk']
+        );
+
+        await connection.commit();
+        res.json({ status: 'Success', message: 'Batch stok baru berhasil ditambahkan!' });
+
+    } catch (error) {
+        await connection.rollback();
+        console.error('❌ Error addStockBatch:', error.message);
+        res.status(500).json({ status: 'Error', message: error.message });
+    } finally {
+        connection.release();
+    }
+};
+
+// 2. Pengeluaran Barang Otomatis Memotong Batch Expired Terdekat (Auto-FIFO Engine)
 exports.reduceStockFifo = async (req, res) => {
     const connection = await db.getConnection();
     try {
@@ -13,7 +52,6 @@ exports.reduceStockFifo = async (req, res) => {
 
         await connection.beginTransaction();
 
-        // 1. Ambil Batch yang masih ada stok, diurutkan dari expired paling dekat (FIFO)
         const [batches] = await connection.query(
             `SELECT * FROM inventory_batches 
              WHERE product_id = ? AND quantity > 0 
@@ -31,7 +69,6 @@ exports.reduceStockFifo = async (req, res) => {
             });
         }
 
-        // 2. Potong stok batch demi batch berdasarkan urutan FIFO
         for (let batch of batches) {
             if (qtyToReduce <= 0) break;
 
@@ -50,7 +87,6 @@ exports.reduceStockFifo = async (req, res) => {
             }
         }
 
-        // 3. Catat di Audit Log Transaksi
         await connection.query(
             `INSERT INTO stock_transactions (product_id, user_id, transaction_type, quantity, notes) 
              VALUES (?, ?, 'OUT', ?, ?)`,
@@ -58,7 +94,7 @@ exports.reduceStockFifo = async (req, res) => {
         );
 
         await connection.commit();
-        res.json({ status: 'Success', message: 'Pengeluaran stok barang berhasil diproses!' });
+        res.json({ status: 'Success', message: 'Pengeluaran stok barang (FIFO) berhasil diproses!' });
 
     } catch (error) {
         await connection.rollback();
@@ -69,7 +105,7 @@ exports.reduceStockFifo = async (req, res) => {
     }
 };
 
-// Ambil Riwayat Audit Log Transaksi
+// 3. Ambil Riwayat Audit Log Transaksi
 exports.getTransactionLogs = async (req, res) => {
     try {
         const query = `
