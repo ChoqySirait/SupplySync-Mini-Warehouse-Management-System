@@ -27,6 +27,7 @@ exports.getAllProducts = async (req, res) => {
             data: products
         });
     } catch (error) {
+        console.error('❌ Error getAllProducts:', error.message);
         res.status(500).json({ status: 'Error', message: error.message });
     }
 };
@@ -53,6 +54,7 @@ exports.getFifoBatches = async (req, res) => {
             data: batches
         });
     } catch (error) {
+        console.error('❌ Error getFifoBatches:', error.message);
         res.status(500).json({ status: 'Error', message: error.message });
     }
 };
