@@ -1,8 +1,9 @@
 let currentProducts = [];
 
-// 1. Ambil Data dari API
+// 1. Ambil Data Utama Dashboard
 async function loadDashboardData() {
     try {
+        // Fetch Data Produk
         const resProducts = await fetch('/api/products');
         const resultProducts = await resProducts.json();
 
@@ -13,6 +14,7 @@ async function loadDashboardData() {
             populateProductDropdowns(currentProducts);
         }
 
+        // Fetch Data Prioritas FIFO
         const resFifo = await fetch('/api/batches/fifo');
         const resultFifo = await resFifo.json();
 
@@ -25,12 +27,15 @@ async function loadDashboardData() {
             document.getElementById('stat-fifo-sub').innerText = "Seluruh stok bersih/kosong";
         }
 
+        // Fetch Riwayat Audit Log
+        await loadTransactionLogs();
+
     } catch (error) {
         console.error('❌ Gagal mengambil data dari API:', error);
     }
 }
 
-// 2. Render Tabel Produk
+// 2. Render Tabel Master Produk
 function renderProductTable(products) {
     const tbody = document.getElementById('product-table-body');
     tbody.innerHTML = '';
@@ -59,7 +64,48 @@ function renderProductTable(products) {
     });
 }
 
-// 3. Update Stat Cards & Dropdowns
+// 3. Render Tabel Audit Log Transaksi
+async function loadTransactionLogs() {
+    try {
+        const res = await fetch('/api/transactions');
+        const result = await res.json();
+        const tbody = document.getElementById('log-table-body');
+        tbody.innerHTML = '';
+
+        if (result.status === 'Success' && result.data.length > 0) {
+            result.data.forEach(log => {
+                const isIN = log.transaction_type === 'IN';
+                const typeBadge = isIN 
+                    ? `<span class="bg-emerald-100 text-emerald-800 text-[10px] font-bold px-2 py-0.5 rounded">STOCK IN</span>`
+                    : `<span class="bg-rose-100 text-rose-800 text-[10px] font-bold px-2 py-0.5 rounded">STOCK OUT (FIFO)</span>`;
+
+                const dateFormatted = new Date(log.created_at).toLocaleString('id-ID', {
+                    dateStyle: 'medium',
+                    timeStyle: 'short'
+                });
+
+                const tr = document.createElement('tr');
+                tr.className = 'hover:bg-slate-50/80 transition';
+                tr.innerHTML = `
+                    <td class="p-4 font-mono text-xs text-slate-500">#LOG-${log.transaction_id}</td>
+                    <td class="p-4 text-xs text-slate-600">${dateFormatted}</td>
+                    <td class="p-4 font-medium text-slate-900">${log.product_name}</td>
+                    <td class="p-4">${typeBadge}</td>
+                    <td class="p-4 font-bold text-right ${isIN ? 'text-emerald-600' : 'text-rose-600'}">${isIN ? '+' : '-'}${log.quantity}</td>
+                    <td class="p-4 text-xs text-slate-600">${log.operator || 'System'}</td>
+                    <td class="p-4 text-xs text-slate-500 italic">${log.notes || '-'}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+        } else {
+            tbody.innerHTML = `<tr><td colspan="7" class="p-6 text-center text-slate-400">Belum ada riwayat transaksi recorded.</td></tr>`;
+        }
+    } catch (error) {
+        console.error('❌ Gagal memuat audit log:', error);
+    }
+}
+
+// 4. Update Stat Cards & Dropdowns
 function updateStatCards(products) {
     document.getElementById('stat-total-products').innerText = products.length;
     const lowStockCount = products.filter(p => p.stock_status === 'Low Stock' || p.stock_status === 'Out of Stock').length;
@@ -69,14 +115,12 @@ function updateStatCards(products) {
 function populateProductDropdowns(products) {
     const inSelect = document.getElementById('in-product-id');
     const outSelect = document.getElementById('out-product-id');
-    
     let options = products.map(p => `<option value="${p.product_id}">${p.product_id} - ${p.product_name} (Stok: ${p.total_stock})</option>`).join('');
-    
     if (inSelect) inSelect.innerHTML = options;
     if (outSelect) outSelect.innerHTML = options;
 }
 
-// 4. Modal Helpers & Form Handlers
+// 5. Modal Helpers & Handlers
 function openModal(id) { document.getElementById(id).classList.remove('hidden'); }
 function closeModal(id) { document.getElementById(id).classList.add('hidden'); }
 
