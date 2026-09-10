@@ -71,12 +71,12 @@ async function loadTransactionLogs() {
         tbody.innerHTML = '';
 
         if (result.status === 'Success' && result.data.length > 0) {
-            currentTransactionLogs = result.data; // Simpan untuk export
+            currentTransactionLogs = result.data;
             result.data.forEach(log => {
                 const isIN = log.transaction_type === 'IN';
                 const typeBadge = isIN 
                     ? `<span class="bg-emerald-100 text-emerald-800 text-[10px] font-bold px-2 py-0.5 rounded">STOCK IN</span>`
-                    : `<span class="bg-rose-100 text-rose-800 text-[10px] font-bold px-2 py-0.5 rounded">STOCK OUT (FIFO)</span>`;
+                    : `<span class="bg-rose-100 text-rose-800 text-[10px] font-bold px-2 py-0.5 rounded">STOCK OUT</span>`;
 
                 const dateFormatted = new Date(log.created_at).toLocaleString('id-ID', {
                     dateStyle: 'medium',
@@ -104,7 +104,7 @@ async function loadTransactionLogs() {
     }
 }
 
-// 4. Fitur Export Log ke File CSV / Excel
+// 4. Fitur Export Log ke CSV
 function exportLogsToCSV() {
     if (currentTransactionLogs.length === 0) {
         alert('⚠️ Belum ada data transaksi untuk di-export.');
@@ -116,7 +116,7 @@ function exportLogsToCSV() {
 
     currentTransactionLogs.forEach(log => {
         const time = new Date(log.created_at).toLocaleString('id-ID');
-        const cleanNotes = (log.notes || '').replace(/,/g, ' '); // Hindari bentrok koma CSV
+        const cleanNotes = (log.notes || '').replace(/,/g, ' ');
         csvContent += `#LOG-${log.transaction_id},"${time}","${log.product_name}",${log.transaction_type},${log.quantity},"${log.operator || 'System'}","${cleanNotes}"\n`;
     });
 
@@ -139,9 +139,13 @@ function updateStatCards(products) {
 function populateProductDropdowns(products) {
     const inSelect = document.getElementById('in-product-id');
     const outSelect = document.getElementById('out-product-id');
+    const dispSelect = document.getElementById('disp-product-id');
+
     let options = products.map(p => `<option value="${p.product_id}">${p.product_id} - ${p.product_name} (Stok: ${p.total_stock})</option>`).join('');
+    
     if (inSelect) inSelect.innerHTML = options;
     if (outSelect) outSelect.innerHTML = options;
+    if (dispSelect) dispSelect.innerHTML = options;
 }
 
 // 6. Modal Helpers & Handlers
@@ -222,6 +226,33 @@ async function handleStockOut(e) {
         alert('🚀 ' + result.message);
         closeModal('modal-stock-out');
         document.getElementById('form-stock-out').reset();
+        loadDashboardData();
+    } else {
+        alert('❌ Error: ' + result.message);
+    }
+}
+
+// Handler Disposal / Pembuangan Barang Afkir
+async function handleStockDisposal(e) {
+    e.preventDefault();
+    const payload = {
+        product_id: document.getElementById('disp-product-id').value,
+        quantity: parseInt(document.getElementById('disp-quantity').value),
+        reason: document.getElementById('disp-reason').value,
+        user_id: 1
+    };
+
+    const res = await fetch('/api/stock/disposal', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+    });
+    const result = await res.json();
+
+    if (result.status === 'Success') {
+        alert('🗑️ ' + result.message);
+        closeModal('modal-stock-disposal');
+        document.getElementById('form-stock-disposal').reset();
         loadDashboardData();
     } else {
         alert('❌ Error: ' + result.message);
