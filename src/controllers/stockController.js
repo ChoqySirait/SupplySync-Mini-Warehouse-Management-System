@@ -12,7 +12,6 @@ exports.addStockBatch = async (req, res) => {
 
         await connection.beginTransaction();
 
-        // Insert batch baru
         const today = new Date().toISOString().split('T')[0];
         await connection.query(
             `INSERT INTO inventory_batches (product_id, quantity, expired_date, received_date) 
@@ -20,7 +19,6 @@ exports.addStockBatch = async (req, res) => {
             [product_id, quantity, expired_date, today]
         );
 
-        // Catat Audit Log
         await connection.query(
             `INSERT INTO stock_transactions (product_id, user_id, transaction_type, quantity, notes) 
              VALUES (?, ?, 'IN', ?, ?)`,
@@ -105,7 +103,75 @@ exports.reduceStockFifo = async (req, res) => {
     }
 };
 
-// 3. Ambil Riwayat Audit Log Transaksi
+// 3. Modul Adjustment & Pembuangan Barang Afkir/Kadaluwarsa (Stock Disposal)
+exports.adjustStockDisposal = async (req, res) => {
+    const connection = await db.getConnection();
+    try {
+        const { product_id, quantity, reason, user_id } = req.body;
+        let qtyToAdjust = parseInt(quantity);
+
+        if (!product_id || !qtyToAdjust || qtyToAdjust <= 0 || !reason) {
+            return res.status(400).json({ status: 'Error', message: 'Produk, jumlah afkir, dan alasan pembuangan wajib diisi!' });
+        }
+
+        await connection.beginTransaction();
+
+        // Cari batch yang paling mendekati kadaluwarsa untuk dibuang lebih dulu
+        const [batches] = await connection.query(
+            `SELECT * FROM inventory_batches 
+             WHERE product_id = ? AND quantity > 0 
+             ORDER BY expired_date ASC 
+             FOR UPDATE`,
+            [product_id]
+        );
+
+        const totalAvailable = batches.reduce((sum, b) => sum + b.quantity, 0);
+        if (totalAvailable < qtyToAdjust) {
+            await connection.rollback();
+            return res.status(400).json({ 
+                status: 'Error', 
+                message: `Jumlah afkir melebihi stok tersedia (${totalAvailable}).` 
+            });
+        }
+
+        for (let batch of batches) {
+            if (qtyToAdjust <= 0) break;
+
+            if (batch.quantity <= qtyToAdjust) {
+                qtyToAdjust -= batch.quantity;
+                await connection.query(
+                    `UPDATE inventory_batches SET quantity = 0 WHERE batch_id = ?`,
+                    [batch.batch_id]
+                );
+            } else {
+                await connection.query(
+                    `UPDATE inventory_batches SET quantity = quantity - ? WHERE batch_id = ?`,
+                    [qtyToAdjust, batch.batch_id]
+                );
+                qtyToAdjust = 0;
+            }
+        }
+
+        // Catat di Audit Log khusus tipe OUT dengan flag Adjustment
+        await connection.query(
+            `INSERT INTO stock_transactions (product_id, user_id, transaction_type, quantity, notes) 
+             VALUES (?, ?, 'OUT', ?, ?)`,
+            [product_id, user_id || 1, quantity, `[DISPOSAL/AFKIR] ${reason}`]
+        );
+
+        await connection.commit();
+        res.json({ status: 'Success', message: 'Penyesuaian stok afkir/kadaluwarsa berhasil dicatat!' });
+
+    } catch (error) {
+        await connection.rollback();
+        console.error('❌ Error adjustStockDisposal:', error.message);
+        res.status(500).json({ status: 'Error', message: error.message });
+    } finally {
+        connection.release();
+    }
+};
+
+// 4. Ambil Riwayat Audit Log Transaksi
 exports.getTransactionLogs = async (req, res) => {
     try {
         const query = `
