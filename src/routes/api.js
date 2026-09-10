@@ -8,9 +8,10 @@ router.get('/products', productController.getAllProducts);
 router.post('/products', productController.createProduct);
 router.get('/batches/fifo', productController.getFifoBatches);
 
-// Routes Transaksi Stok & Audit Log
+// Routes Transaksi Stok, Disposal & Audit Log
 router.post('/stock/in', stockController.addStockBatch);
 router.post('/stock/out', stockController.reduceStockFifo);
+router.post('/stock/disposal', stockController.adjustStockDisposal);
 router.get('/transactions', stockController.getTransactionLogs);
 
 module.exports = router;

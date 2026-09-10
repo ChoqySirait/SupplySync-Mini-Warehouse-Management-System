@@ -80,7 +80,7 @@
                 <!-- Action Controls -->
                 <div class="flex flex-wrap items-center gap-2">
                     <input type="text" id="search-input" placeholder="Cari nama / ID produk..." 
-                           class="text-xs border border-slate-300 rounded-lg px-3 py-2 w-44 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                           class="text-xs border border-slate-300 rounded-lg px-3 py-2 w-40 focus:outline-none focus:ring-2 focus:ring-blue-500">
                     
                     <button onclick="openModal('modal-add-product')" 
                             class="bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold px-3 py-2 rounded-lg transition shadow-sm flex items-center gap-1">
@@ -89,12 +89,17 @@
 
                     <button onclick="openModal('modal-stock-in')" 
                             class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-3 py-2 rounded-lg transition shadow-sm flex items-center gap-1">
-                        ➕ Barang Masuk (IN)
+                        ➕ Barang Masuk
                     </button>
                     
                     <button onclick="openModal('modal-stock-out')" 
                             class="bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold px-3 py-2 rounded-lg transition shadow-sm flex items-center gap-1">
-                        ➖ Keluar Barang (FIFO)
+                        ➖ Keluar Barang
+                    </button>
+
+                    <button onclick="openModal('modal-stock-disposal')" 
+                            class="bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold px-3 py-2 rounded-lg transition shadow-sm flex items-center gap-1">
+                        🗑️ Buang Afkir
                     </button>
                 </div>
             </div>
@@ -164,30 +169,28 @@
             </div>
         </div>
 
-        <!-- MODAL 1: Transaksi Barang Masuk (Stock In) -->
+        <!-- MODAL 1: Stock In -->
         <div id="modal-stock-in" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
             <div class="bg-white rounded-xl shadow-xl border border-slate-200 max-w-md w-full p-6 relative">
                 <h3 class="text-base font-bold text-slate-900 mb-1">Penerimaan Barang Masuk (Stock In)</h3>
                 <p class="text-xs text-slate-500 mb-4">Tambahkan batch stok baru beserta tanggal expired-nya.</p>
-                
                 <form id="form-stock-in" onsubmit="handleStockIn(event)" class="space-y-3 text-xs">
                     <div>
                         <label class="block font-semibold text-slate-700 mb-1">Pilih Produk</label>
-                        <select id="in-product-id" required class="w-full border border-slate-300 rounded-lg p-2.5 focus:ring-2 focus:ring-blue-500 outline-none"></select>
+                        <select id="in-product-id" required class="w-full border border-slate-300 rounded-lg p-2.5 outline-none focus:ring-2 focus:ring-blue-500"></select>
                     </div>
                     <div>
-                        <label class="block font-semibold text-slate-700 mb-1">Jumlah Masuk (Quantity)</label>
-                        <input type="number" id="in-quantity" min="1" required class="w-full border border-slate-300 rounded-lg p-2.5 focus:ring-2 focus:ring-blue-500 outline-none">
+                        <label class="block font-semibold text-slate-700 mb-1">Jumlah Masuk</label>
+                        <input type="number" id="in-quantity" min="1" required class="w-full border border-slate-300 rounded-lg p-2.5 outline-none focus:ring-2 focus:ring-blue-500">
                     </div>
                     <div>
-                        <label class="block font-semibold text-slate-700 mb-1">Tanggal Kedaluwarsa (Expired Date)</label>
-                        <input type="date" id="in-expired-date" required class="w-full border border-slate-300 rounded-lg p-2.5 focus:ring-2 focus:ring-blue-500 outline-none">
+                        <label class="block font-semibold text-slate-700 mb-1">Tanggal Kedaluwarsa</label>
+                        <input type="date" id="in-expired-date" required class="w-full border border-slate-300 rounded-lg p-2.5 outline-none focus:ring-2 focus:ring-blue-500">
                     </div>
                     <div>
                         <label class="block font-semibold text-slate-700 mb-1">Catatan / Asal Pasokan</label>
-                        <input type="text" id="in-notes" placeholder="Misal: Penerimaan dari Supplier X" class="w-full border border-slate-300 rounded-lg p-2.5 focus:ring-2 focus:ring-blue-500 outline-none">
+                        <input type="text" id="in-notes" placeholder="Misal: Supplier A" class="w-full border border-slate-300 rounded-lg p-2.5 outline-none focus:ring-2 focus:ring-blue-500">
                     </div>
-
                     <div class="flex justify-end gap-2 pt-3 border-t border-slate-100">
                         <button type="button" onclick="closeModal('modal-stock-in')" class="px-4 py-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium">Batal</button>
                         <button type="submit" class="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-medium">Simpan Batch</button>
@@ -196,26 +199,24 @@
             </div>
         </div>
 
-        <!-- MODAL 2: Transaksi Pengeluaran Barang Auto-FIFO (Stock Out) -->
+        <!-- MODAL 2: Stock Out (FIFO) -->
         <div id="modal-stock-out" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
             <div class="bg-white rounded-xl shadow-xl border border-slate-200 max-w-md w-full p-6 relative">
                 <h3 class="text-base font-bold text-slate-900 mb-1">Pengeluaran Barang (Auto-FIFO Outflow)</h3>
-                <p class="text-xs text-slate-500 mb-4">Sistem akan otomatis memotong batch yang kedaluwarsa paling dekat terlebih dahulu.</p>
-                
+                <p class="text-xs text-slate-500 mb-4">Sistem memotong batch yang kedaluwarsa paling dekat terlebih dahulu.</p>
                 <form id="form-stock-out" onsubmit="handleStockOut(event)" class="space-y-3 text-xs">
                     <div>
                         <label class="block font-semibold text-slate-700 mb-1">Pilih Produk</label>
-                        <select id="out-product-id" required class="w-full border border-slate-300 rounded-lg p-2.5 focus:ring-2 focus:ring-blue-500 outline-none"></select>
+                        <select id="out-product-id" required class="w-full border border-slate-300 rounded-lg p-2.5 outline-none focus:ring-2 focus:ring-blue-500"></select>
                     </div>
                     <div>
                         <label class="block font-semibold text-slate-700 mb-1">Jumlah Dikeluarkan</label>
-                        <input type="number" id="out-quantity" min="1" required class="w-full border border-slate-300 rounded-lg p-2.5 focus:ring-2 focus:ring-blue-500 outline-none">
+                        <input type="number" id="out-quantity" min="1" required class="w-full border border-slate-300 rounded-lg p-2.5 outline-none focus:ring-2 focus:ring-blue-500">
                     </div>
                     <div>
                         <label class="block font-semibold text-slate-700 mb-1">Tujuan / Alasan Pengeluaran</label>
-                        <input type="text" id="out-notes" placeholder="Misal: Penjualan Klien A / Barang Afkir Cadangan" class="w-full border border-slate-300 rounded-lg p-2.5 focus:ring-2 focus:ring-blue-500 outline-none">
+                        <input type="text" id="out-notes" placeholder="Misal: Penjualan Klien A" class="w-full border border-slate-300 rounded-lg p-2.5 outline-none focus:ring-2 focus:ring-blue-500">
                     </div>
-
                     <div class="flex justify-end gap-2 pt-3 border-t border-slate-100">
                         <button type="button" onclick="closeModal('modal-stock-out')" class="px-4 py-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium">Batal</button>
                         <button type="submit" class="px-4 py-2 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-medium">Proses FIFO Outflow</button>
@@ -224,39 +225,67 @@
             </div>
         </div>
 
-        <!-- MODAL 3: Tambah Produk Baru (SKU Management) -->
+        <!-- MODAL 3: Tambah Produk Baru -->
         <div id="modal-add-product" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
             <div class="bg-white rounded-xl shadow-xl border border-slate-200 max-w-md w-full p-6 relative">
                 <h3 class="text-base font-bold text-slate-900 mb-1">Tambah Produk / SKU Baru</h3>
                 <p class="text-xs text-slate-500 mb-4">Daftarkan jenis barang baru ke dalam master data inventaris.</p>
-                
                 <form id="form-add-product" onsubmit="handleAddProduct(event)" class="space-y-3 text-xs">
                     <div>
                         <label class="block font-semibold text-slate-700 mb-1">Kode / ID Produk (SKU)</label>
-                        <input type="text" id="prod-id" placeholder="Contoh: PRD-004" required class="w-full border border-slate-300 rounded-lg p-2.5 focus:ring-2 focus:ring-blue-500 outline-none uppercase font-mono">
+                        <input type="text" id="prod-id" placeholder="Contoh: PRD-004" required class="w-full border border-slate-300 rounded-lg p-2.5 outline-none focus:ring-2 focus:ring-blue-500 uppercase font-mono">
                     </div>
                     <div>
                         <label class="block font-semibold text-slate-700 mb-1">Nama Barang</label>
-                        <input type="text" id="prod-name" placeholder="Contoh: Minyak Goreng Sawit 2L" required class="w-full border border-slate-300 rounded-lg p-2.5 focus:ring-2 focus:ring-blue-500 outline-none">
+                        <input type="text" id="prod-name" placeholder="Contoh: Minyak Goreng Sawit 2L" required class="w-full border border-slate-300 rounded-lg p-2.5 outline-none focus:ring-2 focus:ring-blue-500">
                     </div>
                     <div class="grid grid-cols-2 gap-2">
                         <div>
                             <label class="block font-semibold text-slate-700 mb-1">Kategori</label>
-                            <input type="text" id="prod-category" placeholder="Contoh: Sembako" required class="w-full border border-slate-300 rounded-lg p-2.5 focus:ring-2 focus:ring-blue-500 outline-none">
+                            <input type="text" id="prod-category" placeholder="Sembako" required class="w-full border border-slate-300 rounded-lg p-2.5 outline-none focus:ring-2 focus:ring-blue-500">
                         </div>
                         <div>
                             <label class="block font-semibold text-slate-700 mb-1">Satuan</label>
-                            <input type="text" id="prod-unit" placeholder="Pcs / Kg / Karton" required class="w-full border border-slate-300 rounded-lg p-2.5 focus:ring-2 focus:ring-blue-500 outline-none">
+                            <input type="text" id="prod-unit" placeholder="Pcs / Karton" required class="w-full border border-slate-300 rounded-lg p-2.5 outline-none focus:ring-2 focus:ring-blue-500">
                         </div>
                     </div>
                     <div>
-                        <label class="block font-semibold text-slate-700 mb-1">Stok Minimum (Ambang Batas Aman)</label>
-                        <input type="number" id="prod-min-stock" value="10" min="1" required class="w-full border border-slate-300 rounded-lg p-2.5 focus:ring-2 focus:ring-blue-500 outline-none">
+                        <label class="block font-semibold text-slate-700 mb-1">Stok Minimum Aman</label>
+                        <input type="number" id="prod-min-stock" value="10" min="1" required class="w-full border border-slate-300 rounded-lg p-2.5 outline-none focus:ring-2 focus:ring-blue-500">
                     </div>
-
                     <div class="flex justify-end gap-2 pt-3 border-t border-slate-100">
                         <button type="button" onclick="closeModal('modal-add-product')" class="px-4 py-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium">Batal</button>
                         <button type="submit" class="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-medium">Daftarkan Produk</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- MODAL 4: Penyesuaian Pembuangan Barang Afkir / Kadaluwarsa -->
+        <div id="modal-stock-disposal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+            <div class="bg-white rounded-xl shadow-xl border border-slate-200 max-w-md w-full p-6 relative">
+                <h3 class="text-base font-bold text-slate-900 mb-1">Pembuangan Barang Afkir / Kadaluwarsa</h3>
+                <p class="text-xs text-slate-500 mb-4">Pilih produk dan jumlah yang rusak/kadaluwarsa untuk dikeluarkan dari stok aktif.</p>
+                <form id="form-stock-disposal" onsubmit="handleStockDisposal(event)" class="space-y-3 text-xs">
+                    <div>
+                        <label class="block font-semibold text-slate-700 mb-1">Pilih Produk</label>
+                        <select id="disp-product-id" required class="w-full border border-slate-300 rounded-lg p-2.5 outline-none focus:ring-2 focus:ring-amber-500"></select>
+                    </div>
+                    <div>
+                        <label class="block font-semibold text-slate-700 mb-1">Jumlah Dibuang / Afkir</label>
+                        <input type="number" id="disp-quantity" min="1" required class="w-full border border-slate-300 rounded-lg p-2.5 outline-none focus:ring-2 focus:ring-amber-500">
+                    </div>
+                    <div>
+                        <label class="block font-semibold text-slate-700 mb-1">Alasan Pembuangan (Disposal Reason)</label>
+                        <select id="disp-reason" required class="w-full border border-slate-300 rounded-lg p-2.5 outline-none focus:ring-2 focus:ring-amber-500">
+                            <option value="Barang Kadaluwarsa (Expired Date Passed)">Barang Kadaluwarsa (Expired Date Passed)</option>
+                            <option value="Kemasan Rusak / Bocor Saat Handling">Kemasan Rusak / Bocor Saat Handling</option>
+                            <option value="Kualitas Menurun / Busuk">Kualitas Menurun / Busuk</option>
+                        </select>
+                    </div>
+                    <div class="flex justify-end gap-2 pt-3 border-t border-slate-100">
+                        <button type="button" onclick="closeModal('modal-stock-disposal')" class="px-4 py-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium">Batal</button>
+                        <button type="submit" class="px-4 py-2 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-medium">Proses Pembuangan Afkir</button>
                     </div>
                 </form>
             </div>
@@ -266,7 +295,7 @@
 
     <!-- Footer -->
     <footer class="bg-white border-t border-slate-200 py-4 text-center text-xs text-slate-500">
-        SupplySync WMS Enterprise &copy; 2026 
+        SupplySync WMS Enterprise &copy; 2026 — Logika FIFO & Stock Audit Module
     </footer>
 
     <!-- Script Frontend JS -->
