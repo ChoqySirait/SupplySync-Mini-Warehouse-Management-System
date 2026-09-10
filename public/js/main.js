@@ -3,7 +3,6 @@ let currentProducts = [];
 // 1. Ambil Data Utama Dashboard
 async function loadDashboardData() {
     try {
-        // Fetch Data Produk
         const resProducts = await fetch('/api/products');
         const resultProducts = await resProducts.json();
 
@@ -14,7 +13,6 @@ async function loadDashboardData() {
             populateProductDropdowns(currentProducts);
         }
 
-        // Fetch Data Prioritas FIFO
         const resFifo = await fetch('/api/batches/fifo');
         const resultFifo = await resFifo.json();
 
@@ -27,7 +25,6 @@ async function loadDashboardData() {
             document.getElementById('stat-fifo-sub').innerText = "Seluruh stok bersih/kosong";
         }
 
-        // Fetch Riwayat Audit Log
         await loadTransactionLogs();
 
     } catch (error) {
@@ -123,6 +120,34 @@ function populateProductDropdowns(products) {
 // 5. Modal Helpers & Handlers
 function openModal(id) { document.getElementById(id).classList.remove('hidden'); }
 function closeModal(id) { document.getElementById(id).classList.add('hidden'); }
+
+// Handler Tambah Produk Baru
+async function handleAddProduct(e) {
+    e.preventDefault();
+    const payload = {
+        product_id: document.getElementById('prod-id').value.toUpperCase(),
+        product_name: document.getElementById('prod-name').value,
+        category: document.getElementById('prod-category').value,
+        unit: document.getElementById('prod-unit').value,
+        min_stock: parseInt(document.getElementById('prod-min-stock').value)
+    };
+
+    const res = await fetch('/api/products', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+    });
+    const result = await res.json();
+
+    if (result.status === 'Success') {
+        alert('📦 ' + result.message);
+        closeModal('modal-add-product');
+        document.getElementById('form-add-product').reset();
+        loadDashboardData();
+    } else {
+        alert('❌ Error: ' + result.message);
+    }
+}
 
 async function handleStockIn(e) {
     e.preventDefault();
