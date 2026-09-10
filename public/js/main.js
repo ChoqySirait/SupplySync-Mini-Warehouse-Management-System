@@ -1,4 +1,5 @@
 let currentProducts = [];
+let currentTransactionLogs = [];
 
 // 1. Ambil Data Utama Dashboard
 async function loadDashboardData() {
@@ -70,6 +71,7 @@ async function loadTransactionLogs() {
         tbody.innerHTML = '';
 
         if (result.status === 'Success' && result.data.length > 0) {
+            currentTransactionLogs = result.data; // Simpan untuk export
             result.data.forEach(log => {
                 const isIN = log.transaction_type === 'IN';
                 const typeBadge = isIN 
@@ -102,7 +104,32 @@ async function loadTransactionLogs() {
     }
 }
 
-// 4. Update Stat Cards & Dropdowns
+// 4. Fitur Export Log ke File CSV / Excel
+function exportLogsToCSV() {
+    if (currentTransactionLogs.length === 0) {
+        alert('⚠️ Belum ada data transaksi untuk di-export.');
+        return;
+    }
+
+    let csvContent = "data:text/csv;charset=utf-8,";
+    csvContent += "ID Log,Waktu Transaksi,Nama Produk,Tipe Mutasi,Jumlah,Operator,Catatan\n";
+
+    currentTransactionLogs.forEach(log => {
+        const time = new Date(log.created_at).toLocaleString('id-ID');
+        const cleanNotes = (log.notes || '').replace(/,/g, ' '); // Hindari bentrok koma CSV
+        csvContent += `#LOG-${log.transaction_id},"${time}","${log.product_name}",${log.transaction_type},${log.quantity},"${log.operator || 'System'}","${cleanNotes}"\n`;
+    });
+
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `SupplySync_Audit_Log_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+}
+
+// 5. Update Stat Cards & Dropdowns
 function updateStatCards(products) {
     document.getElementById('stat-total-products').innerText = products.length;
     const lowStockCount = products.filter(p => p.stock_status === 'Low Stock' || p.stock_status === 'Out of Stock').length;
@@ -117,11 +144,10 @@ function populateProductDropdowns(products) {
     if (outSelect) outSelect.innerHTML = options;
 }
 
-// 5. Modal Helpers & Handlers
+// 6. Modal Helpers & Handlers
 function openModal(id) { document.getElementById(id).classList.remove('hidden'); }
 function closeModal(id) { document.getElementById(id).classList.add('hidden'); }
 
-// Handler Tambah Produk Baru
 async function handleAddProduct(e) {
     e.preventDefault();
     const payload = {
