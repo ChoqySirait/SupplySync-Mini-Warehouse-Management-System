@@ -58,3 +58,41 @@ exports.getFifoBatches = async (req, res) => {
         res.status(500).json({ status: 'Error', message: error.message });
     }
 };
+
+// 3. Tambah Produk / SKU Baru ke Master Data
+exports.createProduct = async (req, res) => {
+    try {
+        const { product_id, product_name, category, min_stock, unit } = req.body;
+
+        if (!product_id || !product_name || !category || !unit) {
+            return res.status(400).json({ 
+                status: 'Error', 
+                message: 'ID Produk, Nama, Kategori, dan Satuan wajib diisi!' 
+            });
+        }
+
+        // Cek apakah ID produk sudah terdaftar
+        const [existing] = await db.query('SELECT product_id FROM products WHERE product_id = ?', [product_id]);
+        if (existing.length > 0) {
+            return res.status(400).json({ 
+                status: 'Error', 
+                message: `ID Produk '${product_id}' sudah terdaftar di sistem.` 
+            });
+        }
+
+        await db.query(
+            `INSERT INTO products (product_id, product_name, category, min_stock, unit) 
+             VALUES (?, ?, ?, ?, ?)`,
+            [product_id, product_name, category, min_stock || 10, unit]
+        );
+
+        res.json({ 
+            status: 'Success', 
+            message: `Produk '${product_name}' (${product_id}) berhasil ditambahkan!` 
+        });
+
+    } catch (error) {
+        console.error('❌ Error createProduct:', error.message);
+        res.status(500).json({ status: 'Error', message: error.message });
+    }
+};

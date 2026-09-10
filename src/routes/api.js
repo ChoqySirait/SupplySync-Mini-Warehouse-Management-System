@@ -5,9 +5,10 @@ const stockController = require('../controllers/stockController');
 
 // Routes Produk & Batch
 router.get('/products', productController.getAllProducts);
+router.post('/products', productController.createProduct);
 router.get('/batches/fifo', productController.getFifoBatches);
 
-// Routes Transaksi Stok & Audit Log (PASTIKAN DUA BARIS INI ADA)
+// Routes Transaksi Stok & Audit Log
 router.post('/stock/in', stockController.addStockBatch);
 router.post('/stock/out', stockController.reduceStockFifo);
 router.get('/transactions', stockController.getTransactionLogs);
