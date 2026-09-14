@@ -18,14 +18,12 @@ exports.getAllProducts = async (req, res) => {
                 END AS stock_status
             FROM products p
             LEFT JOIN inventory_batches b ON p.product_id = b.product_id
-            GROUP BY p.product_id, p.product_name, p.category, p.unit, p.min_stock;
+            GROUP BY p.product_id, p.product_name, p.category, p.unit, p.min_stock
+            ORDER BY p.created_at DESC;
         `;
         
         const [products] = await db.query(query);
-        res.json({
-            status: 'Success',
-            data: products
-        });
+        res.json({ status: 'Success', data: products });
     } catch (error) {
         console.error('❌ Error getAllProducts:', error.message);
         res.status(500).json({ status: 'Error', message: error.message });
@@ -38,6 +36,7 @@ exports.getFifoBatches = async (req, res) => {
         const query = `
             SELECT 
                 b.batch_id,
+                b.product_id,
                 p.product_name,
                 b.quantity,
                 b.expired_date,
@@ -49,47 +48,33 @@ exports.getFifoBatches = async (req, res) => {
         `;
 
         const [batches] = await db.query(query);
-        res.json({
-            status: 'Success',
-            data: batches
-        });
+        res.json({ status: 'Success', data: batches });
     } catch (error) {
         console.error('❌ Error getFifoBatches:', error.message);
         res.status(500).json({ status: 'Error', message: error.message });
     }
 };
 
-// 3. Tambah Produk / SKU Baru ke Master Data
+// 3. Tambah Produk Baru
 exports.createProduct = async (req, res) => {
     try {
         const { product_id, product_name, category, min_stock, unit } = req.body;
 
         if (!product_id || !product_name || !category || !unit) {
-            return res.status(400).json({ 
-                status: 'Error', 
-                message: 'ID Produk, Nama, Kategori, dan Satuan wajib diisi!' 
-            });
+            return res.status(400).json({ status: 'Error', message: 'Semua bidang master produk wajib diisi!' });
         }
 
-        // Cek apakah ID produk sudah terdaftar
         const [existing] = await db.query('SELECT product_id FROM products WHERE product_id = ?', [product_id]);
         if (existing.length > 0) {
-            return res.status(400).json({ 
-                status: 'Error', 
-                message: `ID Produk '${product_id}' sudah terdaftar di sistem.` 
-            });
+            return res.status(400).json({ status: 'Error', message: `SKU / ID '${product_id}' sudah terdaftar.` });
         }
 
         await db.query(
-            `INSERT INTO products (product_id, product_name, category, min_stock, unit) 
-             VALUES (?, ?, ?, ?, ?)`,
+            `INSERT INTO products (product_id, product_name, category, min_stock, unit) VALUES (?, ?, ?, ?, ?)`,
             [product_id, product_name, category, min_stock || 10, unit]
         );
 
-        res.json({ 
-            status: 'Success', 
-            message: `Produk '${product_name}' (${product_id}) berhasil ditambahkan!` 
-        });
+        res.json({ status: 'Success', message: `Produk '${product_name}' (${product_id}) berhasil didaftarkan!` });
 
     } catch (error) {
         console.error('❌ Error createProduct:', error.message);
