@@ -1,5 +1,6 @@
 let currentProducts = [];
 let currentTransactionLogs = [];
+let chartInstance = null;
 
 // 1. Tab Navigation Switcher
 function switchTab(tabName) {
@@ -53,7 +54,86 @@ async function loadDashboardData() {
     }
 }
 
-// 3. Render Tabel Master Produk
+// 3. Render Grafik Visual Analytics (Chart.js)
+function renderAnalyticsChart(logs) {
+    const ctx = document.getElementById('stockMovementChart');
+    if (!ctx) return;
+
+    // Kelompokkan data transaksi berdasarkan produk
+    const productLabels = [];
+    const inData = [];
+    const outData = [];
+
+    const summaryMap = {};
+
+    logs.forEach(log => {
+        const pName = log.product_name;
+        if (!summaryMap[pName]) {
+            summaryMap[pName] = { in: 0, out: 0 };
+        }
+
+        if (log.transaction_type === 'IN') {
+            summaryMap[pName].in += parseInt(log.quantity);
+        } else {
+            summaryMap[pName].out += parseInt(log.quantity);
+        }
+    });
+
+    Object.keys(summaryMap).forEach(pName => {
+        productLabels.push(pName);
+        inData.push(summaryMap[pName].in);
+        outData.push(summaryMap[pName].out);
+    });
+
+    if (chartInstance) {
+        chartInstance.destroy(); // Bersihkan instance chart lama sebelum render ulang
+    }
+
+    chartInstance = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: productLabels.length > 0 ? productLabels : ['Belum Ada Transaksi'],
+            datasets: [
+                {
+                    label: 'Volume Masuk (Inbound)',
+                    data: inData.length > 0 ? inData : [0],
+                    backgroundColor: 'rgba(5, 150, 105, 0.85)',
+                    borderColor: '#059669',
+                    borderWidth: 1,
+                    borderRadius: 6
+                },
+                {
+                    label: 'Volume Keluar (Outflow FIFO / Disposal)',
+                    data: outData.length > 0 ? outData : [0],
+                    backgroundColor: 'rgba(225, 29, 72, 0.85)',
+                    borderColor: '#e11d48',
+                    borderWidth: 1,
+                    borderRadius: 6
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'top',
+                    labels: {
+                        font: { family: 'Plus Jakarta Sans', size: 12, weight: 600 }
+                    }
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: { precision: 0 }
+                }
+            }
+        }
+    });
+}
+
+// 4. Render Tabel Master Produk
 function renderProductTable(products) {
     const tbody = document.getElementById('product-table-body');
     if (!tbody) return;
@@ -88,7 +168,7 @@ function renderProductTable(products) {
     });
 }
 
-// 4. Render Tabel Audit Log
+// 5. Render Tabel Audit Log
 async function loadTransactionLogs() {
     try {
         const res = await fetch('/api/transactions');
@@ -99,6 +179,8 @@ async function loadTransactionLogs() {
 
         if (result.status === 'Success' && result.data && result.data.length > 0) {
             currentTransactionLogs = result.data;
+            renderAnalyticsChart(currentTransactionLogs); // Render Grafik
+
             result.data.forEach(log => {
                 const isIN = log.transaction_type === 'IN';
                 const typeBadge = isIN 
@@ -125,13 +207,14 @@ async function loadTransactionLogs() {
             });
         } else {
             tbody.innerHTML = `<tr><td colspan="7" class="p-6 text-center text-slate-400">Belum ada riwayat transaksi recorded.</td></tr>`;
+            renderAnalyticsChart([]);
         }
     } catch (error) {
         console.error('❌ Gagal memuat audit log:', error);
     }
 }
 
-// Populasi Dropdown Produk Safe Guard
+// Dropdown Helper & Stat Cards
 function populateProductDropdowns(products) {
     const inSelect = document.getElementById('in-product-id');
     const outSelect = document.getElementById('out-product-id');
@@ -161,7 +244,7 @@ function updateStatCards(products) {
 function openModal(id) { document.getElementById(id).classList.remove('hidden'); }
 function closeModal(id) { document.getElementById(id).classList.add('hidden'); }
 
-// Handlers Submit Form
+// Form Handlers
 async function handleAddProduct(e) {
     e.preventDefault();
     const payload = {
@@ -185,19 +268,15 @@ async function handleAddProduct(e) {
             closeModal('modal-add-product');
             document.getElementById('form-add-product').reset();
             await loadDashboardData();
-        } else { 
-            alert('❌ Error: ' + result.message); 
-        }
-    } catch (err) {
-        alert('❌ Network Error: ' + err.message);
-    }
+        } else { alert('❌ Error: ' + result.message); }
+    } catch (err) { alert('❌ Network Error: ' + err.message); }
 }
 
 async function handleStockIn(e) {
     e.preventDefault();
     const prodId = document.getElementById('in-product-id').value;
     if (!prodId) {
-        alert('⚠️ Pilih produk SKU terlebih dahulu! Jika belum ada, buat produk baru lewat "+ Tambah SKU Baru".');
+        alert('⚠️ Pilih produk SKU terlebih dahulu!');
         return;
     }
 

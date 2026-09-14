@@ -6,6 +6,8 @@
     <title>SupplySync — Enterprise Warehouse Platform</title>
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chart.js CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link rel="stylesheet" href="css/style.css">
 </head>
 <body class="bg-slate-50 text-slate-800 antialiased min-h-screen flex">
@@ -143,6 +145,23 @@
                         </button>
                     </div>
                 </div>
+
+                <!-- SECTION GRAFIK VISUAL ANALYTICS (BARU) -->
+                <div class="card-enterprise p-6 rounded-2xl space-y-4">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <h3 class="text-sm font-bold text-slate-900">Analisis Pergerakan Mutasi Stok (Inflow vs Outflow)</h3>
+                            <p class="text-xs text-slate-500">Visualisasi akumulasi volume transaksi mutasi barang</p>
+                        </div>
+                        <span class="text-[10px] font-bold text-blue-600 bg-blue-50 px-2.5 py-1 rounded-full border border-blue-200">
+                            Real-time Analytics
+                        </span>
+                    </div>
+                    <!-- Canvas Chart -->
+                    <div class="w-full h-72">
+                        <canvas id="stockMovementChart"></canvas>
+                    </div>
+                </div>
             </div>
 
             <!-- TAB 2: MASTER INVENTARIS -->
@@ -269,7 +288,7 @@
         </main>
     </div>
 
-    <!-- MODAL FORM HIGH CONTRAST (LIGHT ENTERPRISE) -->
+    <!-- MODALS -->
 
     <!-- Modal 1: Stock In -->
     <div id="modal-stock-in" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
