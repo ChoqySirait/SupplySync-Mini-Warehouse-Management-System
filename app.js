@@ -6,18 +6,18 @@ require('dotenv').config();
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// Middleware Body Parser (Wajib untuk menerima input form JSON)
+// Middleware Body Parser (Wajib untuk input JSON & Form)
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Folder Statis Public
+// Folder Statis Frontend Public
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Register Router API
+// Register API Routes
 app.use('/api', apiRoutes);
 
-// Route Utama Serve Frontend HTML
-app.get('*', (req, res) => {
+// Fallback Route Serves Frontend index.html (Sintaks Aman Express)
+app.get('(.*)', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
