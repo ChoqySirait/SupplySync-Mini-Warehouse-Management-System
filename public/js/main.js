@@ -1,7 +1,27 @@
 let currentProducts = [];
 let currentTransactionLogs = [];
 
-// 1. Ambil Data Utama Dashboard
+// 1. Tab Navigation Switcher
+function switchTab(tabName) {
+    document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+    document.querySelectorAll('.nav-link').forEach(el => el.classList.remove('active'));
+
+    const activeTab = document.getElementById(`tab-${tabName}`);
+    const activeNav = document.getElementById(`nav-${tabName}`);
+
+    if (activeTab) activeTab.classList.remove('hidden');
+    if (activeNav) activeNav.classList.add('active');
+
+    const titles = {
+        overview: 'Dashboard Overview',
+        inventory: 'Master Inventaris & Produk SKU',
+        movements: 'Pusat Transaksi & Mutasi Stok',
+        audit: 'Audit Trail Transaksi Real-time'
+    };
+    document.getElementById('page-title').innerText = titles[tabName] || 'Dashboard SupplySync';
+}
+
+// 2. Load Dashboard Data & Fetch MySQL
 async function loadDashboardData() {
     try {
         const resProducts = await fetch('/api/products');
@@ -22,8 +42,8 @@ async function loadDashboardData() {
             document.getElementById('stat-fifo-priority').innerText = topFifo.product_name;
             document.getElementById('stat-fifo-sub').innerText = `Batch #${topFifo.batch_id} — ${topFifo.days_until_expiration} Hari lagi Expired`;
         } else {
-            document.getElementById('stat-fifo-priority').innerText = "Tidak Ada Batch";
-            document.getElementById('stat-fifo-sub').innerText = "Seluruh stok bersih/kosong";
+            document.getElementById('stat-fifo-priority').innerText = "Stok Bersih";
+            document.getElementById('stat-fifo-sub').innerText = "Tidak ada batch mendekati expired";
         }
 
         await loadTransactionLogs();
@@ -33,41 +53,48 @@ async function loadDashboardData() {
     }
 }
 
-// 2. Render Tabel Master Produk
+// 3. Render Tabel Master Produk
 function renderProductTable(products) {
     const tbody = document.getElementById('product-table-body');
+    if (!tbody) return;
     tbody.innerHTML = '';
+
+    if (products.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="6" class="p-6 text-center text-slate-500">Belum ada data produk terdaftar.</td></tr>`;
+        return;
+    }
 
     products.forEach(item => {
         let statusBadge = '';
         if (item.stock_status === 'Safe') {
-            statusBadge = `<span class="bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs px-2.5 py-1 rounded-full font-semibold">Aman</span>`;
+            statusBadge = `<span class="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[10px] px-2.5 py-1 rounded-full font-semibold">Aman</span>`;
         } else if (item.stock_status === 'Low Stock') {
-            statusBadge = `<span class="bg-amber-50 text-amber-700 border border-amber-200 text-xs px-2.5 py-1 rounded-full font-semibold">Low Stock</span>`;
+            statusBadge = `<span class="bg-amber-500/10 text-amber-400 border border-amber-500/20 text-[10px] px-2.5 py-1 rounded-full font-semibold">Low Stock</span>`;
         } else {
-            statusBadge = `<span class="bg-rose-50 text-rose-700 border border-rose-200 text-xs px-2.5 py-1 rounded-full font-semibold">Habis</span>`;
+            statusBadge = `<span class="bg-rose-500/10 text-rose-400 border border-rose-500/20 text-[10px] px-2.5 py-1 rounded-full font-semibold">Habis</span>`;
         }
 
         const tr = document.createElement('tr');
-        tr.className = 'hover:bg-slate-50/80 transition';
+        tr.className = 'hover:bg-slate-800/40 transition border-b border-slate-800/40';
         tr.innerHTML = `
-            <td class="p-4 font-mono font-medium text-slate-600">${item.product_id}</td>
-            <td class="p-4 font-semibold text-slate-900">${item.product_name}</td>
-            <td class="p-4 text-slate-500">${item.category}</td>
-            <td class="p-4 font-bold text-right ${item.stock_status === 'Low Stock' ? 'text-amber-600' : 'text-slate-900'}">${item.total_stock}</td>
-            <td class="p-4 text-slate-500">${item.unit}</td>
+            <td class="p-4 font-mono font-medium text-slate-400">${item.product_id}</td>
+            <td class="p-4 font-semibold text-slate-100">${item.product_name}</td>
+            <td class="p-4 text-slate-400">${item.category}</td>
+            <td class="p-4 font-bold text-right ${item.stock_status === 'Low Stock' ? 'text-amber-400' : 'text-slate-100'}">${item.total_stock}</td>
+            <td class="p-4 text-slate-400">${item.unit}</td>
             <td class="p-4">${statusBadge}</td>
         `;
         tbody.appendChild(tr);
     });
 }
 
-// 3. Render Tabel Audit Log Transaksi
+// 4. Render Tabel Audit Log
 async function loadTransactionLogs() {
     try {
         const res = await fetch('/api/transactions');
         const result = await res.json();
         const tbody = document.getElementById('log-table-body');
+        if (!tbody) return;
         tbody.innerHTML = '';
 
         if (result.status === 'Success' && result.data.length > 0) {
@@ -75,8 +102,8 @@ async function loadTransactionLogs() {
             result.data.forEach(log => {
                 const isIN = log.transaction_type === 'IN';
                 const typeBadge = isIN 
-                    ? `<span class="bg-emerald-100 text-emerald-800 text-[10px] font-bold px-2 py-0.5 rounded">STOCK IN</span>`
-                    : `<span class="bg-rose-100 text-rose-800 text-[10px] font-bold px-2 py-0.5 rounded">STOCK OUT</span>`;
+                    ? `<span class="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[10px] font-bold px-2 py-0.5 rounded-md">STOCK IN</span>`
+                    : `<span class="bg-rose-500/10 text-rose-400 border border-rose-500/20 text-[10px] font-bold px-2 py-0.5 rounded-md">STOCK OUT</span>`;
 
                 const dateFormatted = new Date(log.created_at).toLocaleString('id-ID', {
                     dateStyle: 'medium',
@@ -84,27 +111,37 @@ async function loadTransactionLogs() {
                 });
 
                 const tr = document.createElement('tr');
-                tr.className = 'hover:bg-slate-50/80 transition';
+                tr.className = 'hover:bg-slate-800/40 transition border-b border-slate-800/40';
                 tr.innerHTML = `
-                    <td class="p-4 font-mono text-xs text-slate-500">#LOG-${log.transaction_id}</td>
-                    <td class="p-4 text-xs text-slate-600">${dateFormatted}</td>
-                    <td class="p-4 font-medium text-slate-900">${log.product_name}</td>
+                    <td class="p-4 font-mono text-slate-400">#LOG-${log.transaction_id}</td>
+                    <td class="p-4 text-slate-400">${dateFormatted}</td>
+                    <td class="p-4 font-semibold text-slate-200">${log.product_name}</td>
                     <td class="p-4">${typeBadge}</td>
-                    <td class="p-4 font-bold text-right ${isIN ? 'text-emerald-600' : 'text-rose-600'}">${isIN ? '+' : '-'}${log.quantity}</td>
-                    <td class="p-4 text-xs text-slate-600">${log.operator || 'System'}</td>
-                    <td class="p-4 text-xs text-slate-500 italic">${log.notes || '-'}</td>
+                    <td class="p-4 font-bold text-right ${isIN ? 'text-emerald-400' : 'text-rose-400'}">${isIN ? '+' : '-'}${log.quantity}</td>
+                    <td class="p-4 text-slate-300">${log.operator || 'System Admin'}</td>
+                    <td class="p-4 text-slate-400 italic">${log.notes || '-'}</td>
                 `;
                 tbody.appendChild(tr);
             });
         } else {
-            tbody.innerHTML = `<tr><td colspan="7" class="p-6 text-center text-slate-400">Belum ada riwayat transaksi recorded.</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="7" class="p-6 text-center text-slate-500">Belum ada riwayat transaksi.</td></tr>`;
         }
     } catch (error) {
         console.error('❌ Gagal memuat audit log:', error);
     }
 }
 
-// 4. Fitur Export Log ke CSV
+// 5. Filter Live Search
+function filterProducts() {
+    const keyword = document.getElementById('search-input').value.toLowerCase();
+    const filtered = currentProducts.filter(p => 
+        p.product_name.toLowerCase().includes(keyword) || 
+        p.product_id.toLowerCase().includes(keyword)
+    );
+    renderProductTable(filtered);
+}
+
+// 6. Export CSV
 function exportLogsToCSV() {
     if (currentTransactionLogs.length === 0) {
         alert('⚠️ Belum ada data transaksi untuk di-export.');
@@ -129,7 +166,7 @@ function exportLogsToCSV() {
     document.body.removeChild(link);
 }
 
-// 5. Update Stat Cards & Dropdowns
+// Helpers Modal & Dropdowns
 function updateStatCards(products) {
     document.getElementById('stat-total-products').innerText = products.length;
     const lowStockCount = products.filter(p => p.stock_status === 'Low Stock' || p.stock_status === 'Out of Stock').length;
@@ -148,10 +185,10 @@ function populateProductDropdowns(products) {
     if (dispSelect) dispSelect.innerHTML = options;
 }
 
-// 6. Modal Helpers & Handlers
 function openModal(id) { document.getElementById(id).classList.remove('hidden'); }
 function closeModal(id) { document.getElementById(id).classList.add('hidden'); }
 
+// Handlers Submit Form
 async function handleAddProduct(e) {
     e.preventDefault();
     const payload = {
@@ -174,9 +211,7 @@ async function handleAddProduct(e) {
         closeModal('modal-add-product');
         document.getElementById('form-add-product').reset();
         loadDashboardData();
-    } else {
-        alert('❌ Error: ' + result.message);
-    }
+    } else { alert('❌ Error: ' + result.message); }
 }
 
 async function handleStockIn(e) {
@@ -201,9 +236,7 @@ async function handleStockIn(e) {
         closeModal('modal-stock-in');
         document.getElementById('form-stock-in').reset();
         loadDashboardData();
-    } else {
-        alert('❌ Error: ' + result.message);
-    }
+    } else { alert('❌ Error: ' + result.message); }
 }
 
 async function handleStockOut(e) {
@@ -227,12 +260,9 @@ async function handleStockOut(e) {
         closeModal('modal-stock-out');
         document.getElementById('form-stock-out').reset();
         loadDashboardData();
-    } else {
-        alert('❌ Error: ' + result.message);
-    }
+    } else { alert('❌ Error: ' + result.message); }
 }
 
-// Handler Disposal / Pembuangan Barang Afkir
 async function handleStockDisposal(e) {
     e.preventDefault();
     const payload = {
@@ -254,9 +284,7 @@ async function handleStockDisposal(e) {
         closeModal('modal-stock-disposal');
         document.getElementById('form-stock-disposal').reset();
         loadDashboardData();
-    } else {
-        alert('❌ Error: ' + result.message);
-    }
+    } else { alert('❌ Error: ' + result.message); }
 }
 
 document.addEventListener('DOMContentLoaded', loadDashboardData);
