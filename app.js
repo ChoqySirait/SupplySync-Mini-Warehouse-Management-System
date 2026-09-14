@@ -1,36 +1,26 @@
 const express = require('express');
-const cors = require('cors');
+const path = require('path');
+const apiRoutes = require('./src/routes/api');
 require('dotenv').config();
-
-const db = require('./src/config/database');
-const apiRoutes = require('./src/routes/api'); // 1. Impor file router
 
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// Middleware
-app.use(cors());
+// Middleware Body Parser (Wajib untuk menerima input form JSON)
 app.use(express.json());
-app.use(express.static('public'));
+app.use(express.urlencoded({ extended: true }));
 
-// 2. Hubungkan Endpoint API
+// Folder Statis Public
+app.use(express.static(path.join(__dirname, 'public')));
+
+// Register Router API
 app.use('/api', apiRoutes);
 
-// Route Pengujian Health Check
-app.get('/api/health', async (req, res) => {
-    try {
-        const [rows] = await db.query('SELECT 1 + 1 AS result');
-        res.json({
-            status: 'Success',
-            message: 'Server dan Database berjalan normal!',
-            db_test: rows[0].result
-        });
-    } catch (error) {
-        res.status(500).json({ status: 'Error', message: error.message });
-    }
+// Route Utama Serve Frontend HTML
+app.get('*', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-// Jalankan Server Express
 app.listen(PORT, () => {
     console.log(`🚀 Server SupplySync berjalan di http://localhost:${PORT}`);
 });
