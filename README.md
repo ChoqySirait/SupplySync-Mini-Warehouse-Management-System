@@ -43,3 +43,6 @@ Sistem dibangun menggunakan pendekatan arsitektur **MVC (Model-View-Controller)*
   │ (SQL Queries & Atomic Transactions)
   ▼
 [ MySQL Database (supplysync_db) ]
+
+
+Bye 
