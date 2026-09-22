@@ -45,4 +45,4 @@ Sistem dibangun menggunakan pendekatan arsitektur **MVC (Model-View-Controller)*
 [ MySQL Database (supplysync_db) ]
 
 
-Bye Choqy Pananda Sirai.
+Bye Choqy Pananda Sirait.
