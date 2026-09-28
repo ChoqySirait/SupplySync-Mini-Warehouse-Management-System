@@ -1,48 +1,69 @@
-# SupplySync-Mini-Warehouse-Management-System
+# 📦 SupplySync — Enterprise Mini Warehouse Management System (WMS)
 
-# 📦 SupplySync — Enterprise Warehouse Management System (WMS)
+> **High-Performance Mini WMS with Automated FIFO Batching Engine & Real-Time Audit Trail Logging.**
 
-![System Status](https://img.shields.io/badge/System_Status-Live-emerald?style=for-the-badge)
-![Tech Stack](https://img.shields.io/badge/Tech_Stack-Node.js_%7C_Express_%7C_MySQL_%7C_Tailwind_CSS-blue?style=for-the-badge)
-![License](https://img.shields.io/badge/License-MIT-slate?style=for-the-badge)
-
-**SupplySync** adalah sistem manajemen pergudangan (Warehouse Management System) berstandar *enterprise* yang dirancang untuk mengatasi kompleksitas pelacakan inventaris, mengoptimalkan rotasi barang menggunakan **Auto-FIFO Engine (First-In, First-Out)**, serta menyediakan pencatatan **Audit Trail** transaksi mutasi stok secara *real-time*.
-
----
-
-## 🌟 Fitur Utama (Current Features)
-
-- **Real-Time Inventory Dashboard**: Monitoring stok produk gabungan (*aggregated stock*), status ambang batas aman (*Safe, Low Stock, Out of Stock*), serta ringkasan indikator operasional secara otomatis.
-- **Auto-FIFO Outflow Engine**: Logika pengeluaran barang otomatis berbasis *Database Transaction* (`FOR UPDATE`) yang memotong stok dari batch dengan tanggal kedaluwarsa (*expired date*) paling dekat terlebih dahulu.
-- **Batch-Based Stock Tracking**: Pelacakan setiap penerimaan barang berbasis nomor batch dan masa berlaku produk.
-- **Audit Trail & Transaction Logging**: Pencatatan riwayat setiap transaksi mutasi barang (*Stock In* dan *Stock Out*) lengkap dengan *timestamp*, operator pengelola, serta catatan transaksi untuk menjamin akuntabilitas (*fraud prevention*).
-- **Interactive Modals for Stock Operations**: Antarmuka responsif untuk proses penerimaan (*Stock In*) dan pengeluaran barang (*Stock Out*) tanpa perlu menyentuh database secara manual.
+![Node.js](https://img.shields.io/badge/Node.js-v18%2B-green?style=for-the-badge&logo=node.js)
+![Express.js](https://img.shields.io/badge/Express.js-v4-000000?style=for-the-badge&logo=express)
+![MySQL](https://img.shields.io/badge/MySQL-v8.0-blue?style=for-the-badge&logo=mysql)
+![TailwindCSS](https://img.shields.io/badge/TailwindCSS-v3-38B2AC?style=for-the-badge&logo=tailwind-css)
+![Chart.js](https://img.shields.io/badge/Chart.js-v4-FF6384?style=for-the-badge&logo=chart.js)
+![License](https://img.shields.io/badge/License-MIT-yellow?style=for-the-badge)
 
 ---
 
-## 🏗️ Arsitektur & Teknologi
+## 📄 Product Requirement Document (PRD)
 
-Sistem dibangun menggunakan pendekatan arsitektur **MVC (Model-View-Controller)** yang terpisah secara modular:
+### 1. Project Purpose & Background
+Di industri pergudangan dan agribisnis terintegrasi (seperti manufaktur pakan ternak dan olahan daging unggas), pengelolaan stok bahan baku dan produk jadi yang berumur simpan (*shelf-life*) terbatas membutuhkan akurasi tinggi. Keterlambatan pengeluaran barang dapat mengakibatkan kerugian finansial akibat produk kedaluwarsa (*expired goods*).
 
-- **Frontend**: Standard HTML5, Vanilla JavaScript (ES6+ Fetch API), Tailwind CSS.
-- **Backend**: Node.js & Express.js (RESTful API Architecture).
-- **Database**: MySQL 8.0+ (`mysql2/promise` dengan Connection Pool & Transaction Isolation).
+**SupplySync** dibangun sebagai sistem manajemen pergudangan (*Warehouse Management System*) modern untuk menangani:
+- Penelusuran batch barang berdasarkan tanggal kedaluwarsa (*Expiry Date Tracking*).
+- Otomatisasi pengeluaran barang menggunakan metode **FIFO (First-In, First-Out)** berbasis alokasi *expired date* terdekat.
+- Akuntabilitas mutasi stok melalui catatan **Audit Trail Log** transaksi yang tidak dapat dimodifikasi (*tamper-proof logging*).
 
-### Diagram Alur Data (Architecture Flow)
+---
+
+### 2. Key Features & Business Value
+
+| Fitur Utama | Fungsi & Deskripsi Teknis | Nilai Bisnis / Dampak |
+|---|---|---|
+| **Auto-FIFO Outflow Engine** | Mengurangi stok secara otomatis dari batch yang paling mendekati tanggal kedaluwarsa terlebih dahulu menggunakan transaksi MySQL berantai (`FOR UPDATE`). | Mencegah pembusukan/kerusakan produk di gudang (*zero expired waste*). |
+| **Real-time Inventory Dashboard** | Tampilan ringkasan total SKU, amatan stok kritis (*low stock warning*), dan prioritas pengeluaran batch. | Mempercepat pengambilan keputusan manajerial secara *real-time*. |
+| **Multi-Batch Stock Inbound** | Pencatatan penerimaan barang berdasarkan nomor SKU, kuantitas, dan *expired date* yang fleksibel. | Menjaga presisi histori kedatangan barang dari berbagai *supplier*. |
+| **Audit Trail & Transaction History** | Catatan log otomatis untuk setiap transaksi `STOCK IN`, `STOCK OUT`, dan `DISPOSAL`. | Memudahkan audit internal dan transparansi operasional tim pergudangan. |
+| **Visual Analytics (Chart.js)** | Visualisasi batang (*Bar Chart*) mutasi pergerakan stok *Inflow vs Outflow*. | Memberikan gambaran tren pergantian barang (*inventory turnover*). |
+| **Audit Log Exporting (CSV)** | Ekspor data riwayat transaksi langsung ke format file CSV/Excel. | Memudahkan integrasi dengan departemen Keuangan & Auditing. |
+
+---
+
+## 🏗️ System Architecture & Tech Stack
+
+Aplikasi ini menggunakan pendekatan arsitektur **MVC (Model-View-Controller)** yang modular dan terpisah antara *Frontend* dan *Backend* API:
+
 ```text
-[ Browser / Frontend Client ]
-           │
-           │ (RESTful API Requests via Fetch)
-           ▼
-[ Node.js + Express Server (app.js) ]
-           │
-  ┌────────┴────────┐
-  ▼                 ▼
-[ Controllers ]  [ API Routes ]
-  │
-  │ (SQL Queries & Atomic Transactions)
-  ▼
-[ MySQL Database (supplysync_db) ]
-
-
-Bye Choqy Pananda Sirait.
+SupplySync-Mini-Warehouse-Management-System/
+│
+├── database/
+│   └── schema.sql            # Schema MySQL, Relasi DDL, dan Data Seeder Initial
+│
+├── public/                   # FRONTEND (Client-side Assets)
+│   ├── css/
+│   │   └── style.css         # Clean Enterprise Light Design & Custom Scrollbar
+│   ├── js/
+│   │   ├── main.js           # Logic Fetch API, DOM Manipulation, Modal, & Event Handling
+│   │   └── dashboard.js      # Filter Search & Dynamic Tab Switcher
+│   └── index.html            # Single Page Application (SPA) Layout
+│
+├── src/                      # BACKEND (Server-side Logic)
+│   ├── config/
+│   │   └── database.js       # MySQL Connection Pool & Promise Handler
+│   ├── controllers/
+│   │   ├── productController.js  # Controller SKU, Master Product, & FIFO Prioritization
+│   │   └── stockController.js    # Controller Stock In, Auto-FIFO Outflow Engine, & Disposal
+│   └── routes/
+│       └── api.js            # Express RESTful API Endpoints Router
+│
+├── .env                      # Environment Variables Config
+├── app.js                    # Server Entry Point (Express Application Server)
+├── package.json              # Project Dependencies & Scripts
+└── README.md                 # System & Technical Documentation
