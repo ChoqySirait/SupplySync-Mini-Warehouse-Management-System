@@ -1,184 +1,125 @@
 const db = require('../config/database');
+const inventoryService = require('../services/inventoryService');
 
-// 1. Penerimaan Barang Masuk / Tambah Batch Baru (Stock In)
-exports.addStockBatch = async (req, res) => {
-    const connection = await db.getConnection();
+// 1. Penerimaan Barang Masuk (Stock Inbound)
+exports.addStockBatch = async (req, res, next) => {
+    let connection;
     try {
-        const { product_id, quantity, expired_date, user_id, notes } = req.body;
-
-        if (!product_id || !quantity || !expired_date) {
-            return res.status(400).json({ status: 'Error', message: 'Data produk, jumlah, dan tanggal expired wajib diisi.' });
-        }
-
+        connection = await db.getConnection();
         await connection.beginTransaction();
 
-        const today = new Date().toISOString().split('T')[0];
-        await connection.query(
-            `INSERT INTO inventory_batches (product_id, quantity, expired_date, received_date) 
-             VALUES (?, ?, ?, ?)`,
-            [product_id, quantity, expired_date, today]
-        );
-
-        await connection.query(
-            `INSERT INTO stock_transactions (product_id, user_id, transaction_type, quantity, notes) 
-             VALUES (?, ?, 'IN', ?, ?)`,
-            [product_id, user_id || 1, quantity, notes || 'Penerimaan batch barang masuk']
-        );
+        const payload = req.validatedBody || req.body;
+        const result = await inventoryService.processStockIn(connection, payload);
 
         await connection.commit();
-        res.json({ status: 'Success', message: 'Batch stok baru berhasil ditambahkan!' });
 
+        res.status(201).json({
+            status: 'Success',
+            message: `Batch barang untuk '${result.product_name}' (${result.quantity} unit) berhasil diterima!`,
+            data: result
+        });
     } catch (error) {
-        await connection.rollback();
+        if (connection) await connection.rollback();
         console.error('❌ Error addStockBatch:', error.message);
-        res.status(500).json({ status: 'Error', message: error.message });
+        res.status(400).json({ status: 'Error', message: error.message });
     } finally {
-        connection.release();
+        if (connection) connection.release();
     }
 };
 
-// 2. Pengeluaran Barang Otomatis Memotong Batch Expired Terdekat (Auto-FIFO Engine)
-exports.reduceStockFifo = async (req, res) => {
-    const connection = await db.getConnection();
+// 2. Pengeluaran Barang Otomatis FEFO (Stock Outflow)
+exports.reduceStockFifo = async (req, res, next) => {
+    let connection;
     try {
-        const { product_id, quantity, user_id, notes } = req.body;
-        let qtyToReduce = parseInt(quantity);
-
-        if (!product_id || !qtyToReduce || qtyToReduce <= 0) {
-            return res.status(400).json({ status: 'Error', message: 'Data produk dan jumlah barang tidak valid.' });
-        }
-
+        connection = await db.getConnection();
         await connection.beginTransaction();
 
-        const [batches] = await connection.query(
-            `SELECT * FROM inventory_batches 
-             WHERE product_id = ? AND quantity > 0 
-             ORDER BY expired_date ASC 
-             FOR UPDATE`,
-            [product_id]
-        );
-
-        const totalAvailable = batches.reduce((sum, b) => sum + b.quantity, 0);
-        if (totalAvailable < qtyToReduce) {
-            await connection.rollback();
-            return res.status(400).json({ 
-                status: 'Error', 
-                message: `Stok tidak mencukupi. Stok tersedia: ${totalAvailable}` 
-            });
-        }
-
-        for (let batch of batches) {
-            if (qtyToReduce <= 0) break;
-
-            if (batch.quantity <= qtyToReduce) {
-                qtyToReduce -= batch.quantity;
-                await connection.query(
-                    `UPDATE inventory_batches SET quantity = 0 WHERE batch_id = ?`,
-                    [batch.batch_id]
-                );
-            } else {
-                await connection.query(
-                    `UPDATE inventory_batches SET quantity = quantity - ? WHERE batch_id = ?`,
-                    [qtyToReduce, batch.batch_id]
-                );
-                qtyToReduce = 0;
-            }
-        }
-
-        await connection.query(
-            `INSERT INTO stock_transactions (product_id, user_id, transaction_type, quantity, notes) 
-             VALUES (?, ?, 'OUT', ?, ?)`,
-            [product_id, user_id || 1, quantity, notes || 'Pengeluaran barang FIFO']
-        );
+        const payload = req.validatedBody || req.body;
+        const result = await inventoryService.processStockOutFefo(connection, payload);
 
         await connection.commit();
-        res.json({ status: 'Success', message: 'Pengeluaran stok barang (FIFO) berhasil diproses!' });
 
+        res.json({
+            status: 'Success',
+            message: `Pengeluaran ${result.total_deducted} unit '${result.product_name}' berhasil diproses via alokasi FEFO!`,
+            data: result
+        });
     } catch (error) {
-        await connection.rollback();
+        if (connection) await connection.rollback();
         console.error('❌ Error reduceStockFifo:', error.message);
-        res.status(500).json({ status: 'Error', message: error.message });
+        res.status(400).json({ status: 'Error', message: error.message });
     } finally {
-        connection.release();
+        if (connection) connection.release();
     }
 };
 
-// 3. Modul Adjustment & Pembuangan Barang Afkir/Kadaluwarsa (Stock Disposal)
-exports.adjustStockDisposal = async (req, res) => {
-    const connection = await db.getConnection();
+// 3. Modul Pembuangan Barang Afkir / Kadaluwarsa (Stock Disposal)
+exports.adjustStockDisposal = async (req, res, next) => {
+    let connection;
     try {
-        const { product_id, quantity, reason, user_id } = req.body;
-        let qtyToAdjust = parseInt(quantity);
-
-        if (!product_id || !qtyToAdjust || qtyToAdjust <= 0 || !reason) {
-            return res.status(400).json({ status: 'Error', message: 'Produk, jumlah afkir, dan alasan pembuangan wajib diisi!' });
-        }
-
+        connection = await db.getConnection();
         await connection.beginTransaction();
 
-        // Cari batch yang paling mendekati kadaluwarsa untuk dibuang lebih dulu
-        const [batches] = await connection.query(
-            `SELECT * FROM inventory_batches 
-             WHERE product_id = ? AND quantity > 0 
-             ORDER BY expired_date ASC 
-             FOR UPDATE`,
-            [product_id]
-        );
-
-        const totalAvailable = batches.reduce((sum, b) => sum + b.quantity, 0);
-        if (totalAvailable < qtyToAdjust) {
-            await connection.rollback();
-            return res.status(400).json({ 
-                status: 'Error', 
-                message: `Jumlah afkir melebihi stok tersedia (${totalAvailable}).` 
-            });
-        }
-
-        for (let batch of batches) {
-            if (qtyToAdjust <= 0) break;
-
-            if (batch.quantity <= qtyToAdjust) {
-                qtyToAdjust -= batch.quantity;
-                await connection.query(
-                    `UPDATE inventory_batches SET quantity = 0 WHERE batch_id = ?`,
-                    [batch.batch_id]
-                );
-            } else {
-                await connection.query(
-                    `UPDATE inventory_batches SET quantity = quantity - ? WHERE batch_id = ?`,
-                    [qtyToAdjust, batch.batch_id]
-                );
-                qtyToAdjust = 0;
-            }
-        }
-
-        // Catat di Audit Log khusus tipe OUT dengan flag Adjustment
-        await connection.query(
-            `INSERT INTO stock_transactions (product_id, user_id, transaction_type, quantity, notes) 
-             VALUES (?, ?, 'OUT', ?, ?)`,
-            [product_id, user_id || 1, quantity, `[DISPOSAL/AFKIR] ${reason}`]
-        );
+        const payload = req.validatedBody || req.body;
+        const result = await inventoryService.processStockDisposal(connection, payload);
 
         await connection.commit();
-        res.json({ status: 'Success', message: 'Penyesuaian stok afkir/kadaluwarsa berhasil dicatat!' });
 
+        res.json({
+            status: 'Success',
+            message: `Pembuangan afkir ${result.quantity} unit '${result.product_name}' berhasil dieksekusi dan dicatat!`,
+            data: result
+        });
     } catch (error) {
-        await connection.rollback();
+        if (connection) await connection.rollback();
         console.error('❌ Error adjustStockDisposal:', error.message);
-        res.status(500).json({ status: 'Error', message: error.message });
+        res.status(400).json({ status: 'Error', message: error.message });
     } finally {
-        connection.release();
+        if (connection) connection.release();
     }
 };
 
-// 4. Ambil Riwayat Audit Log Transaksi
+// 4. Modul Rekonsiliasi Stok Opname Fisik (Stock Opname)
+exports.recordStockOpname = async (req, res, next) => {
+    let connection;
+    try {
+        connection = await db.getConnection();
+        await connection.beginTransaction();
+
+        const payload = req.validatedBody || req.body;
+        const result = await inventoryService.processStockOpname(connection, payload);
+
+        await connection.commit();
+
+        const diffText = result.difference > 0 ? `Surplus (+${result.difference})` : result.difference < 0 ? `Defisit (${result.difference})` : 'Sesuai (0)';
+        res.json({
+            status: 'Success',
+            message: `Stock Opname untuk '${result.product_name}' selesai. Selisih: ${diffText}.`,
+            data: result
+        });
+    } catch (error) {
+        if (connection) await connection.rollback();
+        console.error('❌ Error recordStockOpname:', error.message);
+        res.status(400).json({ status: 'Error', message: error.message });
+    } finally {
+        if (connection) connection.release();
+    }
+};
+
+// 5. Ambil Riwayat Audit Log Transaksi Lengkap
 exports.getTransactionLogs = async (req, res) => {
     try {
-        const query = `
+        const { type, product_id, limit = 50, offset = 0 } = req.query;
+
+        let query = `
             SELECT 
                 t.transaction_id,
+                t.reference_no,
+                t.product_id,
                 p.product_name,
+                p.unit,
                 u.full_name AS operator,
+                u.username AS operator_username,
                 t.transaction_type,
                 t.quantity,
                 t.notes,
@@ -186,11 +127,57 @@ exports.getTransactionLogs = async (req, res) => {
             FROM stock_transactions t
             JOIN products p ON t.product_id = p.product_id
             LEFT JOIN users u ON t.user_id = u.user_id
-            ORDER BY t.created_at DESC;
+            WHERE 1=1
         `;
-        const [logs] = await db.query(query);
-        res.json({ status: 'Success', data: logs });
+        const params = [];
+
+        if (type && ['IN', 'OUT', 'DISPOSAL', 'ADJUSTMENT'].includes(type.toUpperCase())) {
+            query += ` AND t.transaction_type = ?`;
+            params.push(type.toUpperCase());
+        }
+
+        if (product_id) {
+            query += ` AND t.product_id = ?`;
+            params.push(product_id);
+        }
+
+        query += ` ORDER BY t.created_at DESC LIMIT ? OFFSET ?`;
+        params.push(parseInt(limit, 10) || 50, parseInt(offset, 10) || 0);
+
+        const [logs] = await db.query(query, params);
+        res.json({ status: 'Success', count: logs.length, data: logs });
     } catch (error) {
+        console.error('❌ Error getTransactionLogs:', error.message);
+        res.status(500).json({ status: 'Error', message: error.message });
+    }
+};
+
+// 6. Ambil Riwayat Stock Opname
+exports.getOpnameLogs = async (req, res) => {
+    try {
+        const query = `
+            SELECT 
+                o.opname_id,
+                o.opname_number,
+                o.product_id,
+                p.product_name,
+                p.unit,
+                o.system_stock,
+                o.physical_stock,
+                o.difference,
+                o.reason,
+                o.status,
+                u.full_name AS operator,
+                o.created_at
+            FROM stock_opname o
+            JOIN products p ON o.product_id = p.product_id
+            LEFT JOIN users u ON o.performed_by = u.user_id
+            ORDER BY o.created_at DESC;
+        `;
+        const [rows] = await db.query(query);
+        res.json({ status: 'Success', data: rows });
+    } catch (error) {
+        console.error('❌ Error getOpnameLogs:', error.message);
         res.status(500).json({ status: 'Error', message: error.message });
     }
 };

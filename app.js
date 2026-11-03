@@ -1,26 +1,51 @@
 const express = require('express');
 const path = require('path');
-const apiRoutes = require('./src/routes/api');
+const cors = require('cors');
 require('dotenv').config();
+
+const apiRoutes = require('./src/routes/api');
+const { errorHandler, notFoundHandler } = require('./src/middlewares/errorHandler');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// Middleware Body Parser (Wajib untuk menerima input JSON & Form)
+// Security & Cross-Origin Middleware
+app.use(cors());
+
+// Basic Security Headers Middleware
+app.use((req, res, next) => {
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('X-Frame-Options', 'DENY');
+    res.setHeader('X-XSS-Protection', '1; mode=block');
+    next();
+});
+
+// Body Parser Middleware
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Folder Statis Public
+// Folder Statis Public untuk Frontend SPA
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Register Router API
+// Register Router REST API
 app.use('/api', apiRoutes);
 
-// Fallback Route Serves Frontend index.html (Sintaks Standar Aman)
+// 404 Handler untuk Route API yang tidak terdaftar
+app.use('/api', notFoundHandler);
+
+// Fallback Route Serves Frontend index.html (SPA)
 app.use((req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-app.listen(PORT, () => {
-    console.log(`🚀 Server SupplySync berjalan di http://localhost:${PORT}`);
-});
+// Centralized Error Handling Middleware
+app.use(errorHandler);
+
+// Jalankan Server jika dipanggil langsung
+if (require.main === module) {
+    app.listen(PORT, () => {
+        console.log(`🚀 Server SupplySync WMS berjalan di http://localhost:${PORT}`);
+    });
+}
+
+module.exports = app;
