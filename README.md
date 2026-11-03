@@ -28,6 +28,8 @@ Di industri pergudangan modern, rantai dingin (*cold chain*), dan agribisnis ter
 
 | Fitur Utama | Fungsi & Deskripsi Teknis | Nilai Bisnis / Dampak |
 |---|---|---|
+| **Purchase & Sales Order Lifecycle (PO & SO)** | Manajemen terintegrasi pengadaan barang dari vendor (*Purchase Order*) dan pesanan penjualan ke pelanggan (*Sales Order*). Terhubung langsung dengan Inbound GRN (otomatis buat batch & lokasi rak) serta Outbound DO (otomatis alokasi potong stok FEFO). Dilengkapi cetak dokumen PO & SO resmi A4. | Menyambungkan tata kelola pergudangan fisik dengan alur bisnis komersial & *supply chain fulfillment*. |
+| **Penguatan RBAC & Scoping Fasilitas** | Penegakan kontrol akses role ketat (`ADMIN`, `MANAGER`, `STAFF`) langsung pada layer backend/API dengan token JWT scrypt dan pembatasan operasional staf gudang (*facility scoping*) berbasis fasilitas cabang yang ditugaskan. | Menjamin kepatuhan integritas data, mencegah eskalasi wewenang, dan mengisolasi operasional staf per cabang. |
 | **Auto-FEFO Outflow Engine** | Mengurangi stok otomatis dari batch dengan tanggal kedaluwarsa paling dekat menggunakan transaksi atomik MySQL dan penguncian baris (`FOR UPDATE`). Mendukung tiebreaker penerimaan (*received_date*) dan perlindungan terhadap batch kedaluwarsa. | Mencegah kerugian barang busuk/kedaluwarsa di gudang (*zero expired waste*). |
 | **Warehouse Bin/Rack Location & Picking Slip** | Setiap batch ditempatkan pada koordinat fisik gudang (*Zone, Aisle, Rack, Tier, Bin*). Saat barang keluar, sistem menerbitkan **Digital Picking Route Slip** yang dapat dicetak langsung. | Mempercepat waktu pemetikan barang (*picking speed*) dan mencegah salah ambil lokasi. |
 | **Valuasi Aset Inventaris & Eksekutif KPI** | Perhitungan otomatis total nilai valuasi aset stok gudang ($\sum \text{stok} \times \text{HPP}$), *Freshness Health Score* batch (rasio segar vs expired), dan pelacakan produk *Fast-Moving*. | Visibilitas finansial dan kesehatan stok waktu-nyata bagi manajemen pergudangan. |
@@ -298,20 +300,22 @@ npm test
 Hasil eksekusi:
 ```text
 ✔ Warehouse KPI & Inventory Valuation Analytics Tests (3 pass)
-✔ Express In-Memory Routing & Security Tests (Zero Network Sockets) (4 pass)
-✔ Auth Middleware & RBAC Tests (4 pass)
+✔ Express In-Memory Routing & Security Tests (Zero Network Sockets) (6 pass)
+✔ Auth Middleware & RBAC Tests (8 pass)
+✔ Database Integrity Verification & Backup Utilities Tests (7 pass)
 ✔ Code 39 SVG Barcode & Thermal Label Generator Tests (5 pass)
 ✔ RFC 4180 CSV Parser & Serializer Tests (5 pass)
 ✔ FEFO Engine Allocation Logic (8 pass)
 ✔ WMS Bulk CSV Import Business Logic Tests (4 pass)
 ✔ Warehouse Bin Location & Picking Route Allocation Tests (2 pass)
+✔ Enterprise RBAC & Facility Scoping Verification Tests (12 pass)
+✔ Phase 18: Purchase Orders (PO) & Sales Orders (SO) Quality Gate Tests (15 pass)
 ✔ WMS Reference Number Generator Tests (4 pass)
 ✔ Security Utilities: Password Hashing & JWT (5 pass)
 ✔ WMS Stock Card Ledger & Running Balance Tests (4 pass)
-✔ Database Integrity Verification & Backup Utilities Tests (7 pass)
 ✔ Phase 17: Inter-Warehouse Transfer & Multi-Facility Quality Gate Tests (10 pass)
 ✔ Middleware Input Validator Tests (12 pass)
-ℹ tests 78 | suites 19 | pass 78 | fail 0
+ℹ tests 110 | suites 21 | pass 110 | fail 0
 ```
 
 ---
@@ -325,18 +329,30 @@ Hasil eksekusi:
 | `GET` | `/api/auth/users` | Ambil daftar pengguna & operator gudang | Public / Admin |
 | `GET` | `/api/analytics/kpi` | Ambil valuasi aset total, health score kesegaran, & fast-moving items | Public |
 | `GET` | `/api/reports/stock-card` | Ambil laporan kartu stok, saldo awal, mutasi, & saldo berjalan (`?format=csv` untuk spreadsheet) | Public |
-| `GET` | `/api/system/health-check` | Audit integritas referensial data, status konsistensi stok master vs batch | Public / Authenticated |
-| `POST` | `/api/system/backup` | Trigger pencadangan database snapshot (JSON & SQL Dump) ke folder `/backups` | Authenticated / Admin |
-| `GET` | `/api/system/backups` | Ambil daftar riwayat berkas cadangan database yang tersimpan | Authenticated |
-| `GET` | `/api/system/backups/:filename` | Unduh berkas cadangan snapshot spesifik (terproteksi dari path traversal) | Authenticated |
+| `GET` | `/api/system/health-check` | Audit integritas referensial data, status konsistensi stok master vs batch | `ADMIN` / `MANAGER` |
+| `POST` | `/api/system/backup` | Trigger pencadangan database snapshot (JSON & SQL Dump) ke folder `/backups` | `ADMIN` Only |
+| `GET` | `/api/system/backups` | Ambil daftar riwayat berkas cadangan database yang tersimpan | `ADMIN` Only |
+| `GET` | `/api/system/backups/:filename` | Unduh berkas cadangan snapshot spesifik (terproteksi dari path traversal) | `ADMIN` Only |
 | `GET` | `/api/facilities` | Ambil seluruh daftar fasilitas/cabang gudang, kapasitas rak, & stok tersimpan | Public |
-| `POST` | `/api/facilities` | Daftarkan fasilitas/cabang gudang baru | `ADMIN` / `MANAGER` |
+| `POST` | `/api/facilities` | Daftarkan fasilitas/cabang gudang baru | `ADMIN` Only |
 | `GET` | `/api/facilities/:id/locations` | Ambil daftar lokasi rak spesifik pada fasilitas tertentu | Public |
 | `GET` | `/api/transfers` | Ambil riwayat transfer antar-gudang (filter status & fasilitas) | Public |
 | `GET` | `/api/transfers/:id` | Ambil rincian lengkap surat transfer antar-gudang & batch item | Public |
 | `POST` | `/api/transfers` | Inisiasi pengiriman transfer stok antar-gudang (*In-Transit status*) | `ADMIN` / `MANAGER` |
 | `POST` | `/api/transfers/:id/receive` | Konfirmasi penerimaan barang di gudang tujuan (support penerimaan sebagian) | `ADMIN` / `MANAGER` |
 | `POST` | `/api/transfers/:id/cancel` | Batalkan pengiriman transfer & kembalikan stok ke batch asal secara atomik | `ADMIN` / `MANAGER` |
+| `GET` | `/api/orders/purchase` | Ambil daftar pesanan pembelian (*Purchase Orders*) | Authenticated |
+| `GET` | `/api/orders/purchase/:id` | Ambil rincian lengkap PO berserta item produk & progress penerimaan | Authenticated |
+| `POST` | `/api/orders/purchase` | Buat Purchase Order baru ke pemasok (Status: `DRAFT`) | `ADMIN` / `MANAGER` |
+| `POST` | `/api/orders/purchase/:id/approve` | Otorisasi dan setujui PO (Status: `APPROVED`) | `ADMIN` / `MANAGER` |
+| `POST` | `/api/orders/purchase/:id/receive` | Terima pasokan fisik dari PO ke gudang (otomatis buat batch & GRN) | `ADMIN` / `MANAGER` / `STAFF` |
+| `POST` | `/api/orders/purchase/:id/cancel` | Batalkan PO yang belum diterima penuh | `ADMIN` / `MANAGER` |
+| `GET` | `/api/orders/sales` | Ambil daftar pesanan penjualan (*Sales Orders*) | Authenticated |
+| `GET` | `/api/orders/sales/:id` | Ambil rincian lengkap SO berserta item produk pesanan pelanggan | Authenticated |
+| `POST` | `/api/orders/sales` | Buat Sales Order baru dari pelanggan (Status: `DRAFT`) | `ADMIN` / `MANAGER` |
+| `POST` | `/api/orders/sales/:id/confirm` | Konfirmasi pesanan penjualan (Status: `CONFIRMED`) | `ADMIN` / `MANAGER` |
+| `POST` | `/api/orders/sales/:id/dispatch` | Kirim pesanan pelanggan (otomatis potong stok terurut alokasi FEFO) | `ADMIN` / `MANAGER` / `STAFF` |
+| `POST` | `/api/orders/sales/:id/cancel` | Batalkan pesanan penjualan pelanggan | `ADMIN` / `MANAGER` |
 | `GET` | `/api/products` | Ambil semua produk, total stok, HPP, dan status ambang batas | Public |
 | `POST` | `/api/products` | Daftarkan master SKU baru (beserta HPP) | Authenticated |
 | `POST` | `/api/products/import-csv` | Impor massal master SKU produk dari teks/file CSV | Authenticated |

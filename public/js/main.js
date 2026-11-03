@@ -11,6 +11,10 @@ let currentCategories = [];
 let currentSuppliers = [];
 let currentLocations = [];
 let currentUsers = [];
+let currentPurchaseOrders = [];
+let currentSalesOrders = [];
+let selectedPoDetail = null;
+let selectedSoDetail = null;
 let chartInstance = null;
 
 // Auth State
@@ -90,6 +94,7 @@ function switchTab(tabName) {
         inventory: 'Master Inventaris & Rincian Batch SKU',
         movements: 'Pusat Transaksi & Mutasi Stok (FEFO)',
         transfers: 'Transfer Antar-Gudang & Relokasi Multi-Fasilitas',
+        orders: 'Manajemen Pesanan Terintegrasi (Purchase & Sales Orders)',
         opname: 'Rekonsiliasi Stock Opname Fisik',
         locations: 'Peta Lokasi Rak & Bin Gudang',
         audit: 'Audit Trail Transaksi Real-time'
@@ -98,6 +103,9 @@ function switchTab(tabName) {
 
     if (tabName === 'transfers') {
         loadTransfersList();
+    } else if (tabName === 'orders') {
+        loadPurchaseOrdersList();
+        loadSalesOrdersList();
     }
 
     closeMobileSidebar();
@@ -195,6 +203,16 @@ function updateUserInterface() {
         trfBtn.style.display = isStaff ? 'none' : 'flex';
     }
 
+    // PO and SO Creation Buttons
+    const poBtn = document.getElementById('btn-create-po');
+    if (poBtn) {
+        poBtn.style.display = isStaff ? 'none' : 'flex';
+    }
+    const soBtn = document.getElementById('btn-create-so');
+    if (soBtn) {
+        soBtn.style.display = isStaff ? 'none' : 'flex';
+    }
+
     // Backup Button
     const backupBtn = document.getElementById('btn-trigger-backup');
     if (backupBtn) {
@@ -284,7 +302,9 @@ async function loadDashboardData() {
             loadTransactionLogs(),
             loadOpnameLogs(),
             loadFacilities(),
-            loadTransfersList()
+            loadTransfersList(),
+            loadPurchaseOrdersList(),
+            loadSalesOrdersList()
         ]);
     } catch (error) {
         console.error('❌ Gagal sinkronisasi data dashboard:', error);
@@ -2112,6 +2132,964 @@ function printCurrentTransferDetail() {
         printTransferDocument(currentActiveTransfer);
     } else {
         showToast('Modul cetak dokumen belum siap.', 'error');
+    }
+}
+
+// --------------------------------------------------------------------
+// 12. PURCHASE ORDERS (PO) & SALES ORDERS (SO) LIFECYCLE (PHASE 18)
+// --------------------------------------------------------------------
+
+function switchOrderSubTab(type) {
+    const poSec = document.getElementById('orders-sub-po');
+    const soSec = document.getElementById('orders-sub-so');
+    const btnPo = document.getElementById('subtab-btn-po');
+    const btnSo = document.getElementById('subtab-btn-so');
+
+    if (type === 'po') {
+        if (poSec) poSec.classList.remove('hidden');
+        if (soSec) soSec.classList.add('hidden');
+        if (btnPo) {
+            btnPo.className = 'px-4 py-2 rounded-xl font-bold transition bg-white text-blue-700 shadow-xs';
+        }
+        if (btnSo) {
+            btnSo.className = 'px-4 py-2 rounded-xl font-medium text-slate-600 hover:text-slate-900 transition';
+        }
+        loadPurchaseOrdersList();
+    } else {
+        if (poSec) poSec.classList.add('hidden');
+        if (soSec) soSec.classList.remove('hidden');
+        if (btnSo) {
+            btnSo.className = 'px-4 py-2 rounded-xl font-bold transition bg-white text-emerald-700 shadow-xs';
+        }
+        if (btnPo) {
+            btnPo.className = 'px-4 py-2 rounded-xl font-medium text-slate-600 hover:text-slate-900 transition';
+        }
+        loadSalesOrdersList();
+    }
+}
+
+// --- A. PURCHASE ORDER (PO) HANDLERS ---
+
+async function loadPurchaseOrdersList() {
+    const tbody = document.getElementById('po-tbody');
+    if (!tbody) return;
+
+    try {
+        const filterStatus = document.getElementById('filter-po-status')?.value || '';
+        const url = filterStatus ? `/api/orders/purchase?status=${encodeURIComponent(filterStatus)}` : '/api/orders/purchase';
+        
+        const res = await fetch(url, {
+            headers: { 'Authorization': `Bearer ${authToken || localStorage.getItem('supplysync_token') || ''}` }
+        });
+        const json = await res.json();
+
+        if (json.status === 'Success') {
+            currentPurchaseOrders = json.data || [];
+            renderPurchaseOrdersTable(currentPurchaseOrders);
+
+            // KPI Cards Update
+            const total = currentPurchaseOrders.length;
+            const approved = currentPurchaseOrders.filter(p => p.status === 'APPROVED').length;
+            const partial = currentPurchaseOrders.filter(p => p.status === 'PARTIALLY_RECEIVED').length;
+            const received = currentPurchaseOrders.filter(p => p.status === 'RECEIVED').length;
+            const totalVal = currentPurchaseOrders.reduce((sum, p) => sum + Number(p.total_amount || 0), 0);
+
+            document.getElementById('stat-po-total').innerText = `${total} PO`;
+            document.getElementById('stat-po-val').innerText = `Rp ${totalVal.toLocaleString('id-ID')} Total Nilai`;
+            document.getElementById('stat-po-approved').innerText = `${approved} PO`;
+            document.getElementById('stat-po-partial').innerText = `${partial} PO`;
+            document.getElementById('stat-po-received').innerText = `${received} PO`;
+        }
+    } catch (err) {
+        tbody.innerHTML = `<tr><td colspan="8" class="p-8 text-center text-rose-500">Gagal memuat PO: ${escapeHtml(err.message)}</td></tr>`;
+    }
+}
+
+function renderPurchaseOrdersTable(orders) {
+    const tbody = document.getElementById('po-tbody');
+    if (!tbody) return;
+    tbody.innerHTML = '';
+
+    if (!orders || orders.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="8" class="p-8 text-center text-slate-400">Belum ada dokumen Purchase Order (PO) pada status ini.</td></tr>`;
+        return;
+    }
+
+    orders.forEach(po => {
+        const tr = document.createElement('tr');
+        tr.className = 'hover:bg-slate-50 transition border-b border-slate-100';
+
+        let badgeClass = 'bg-slate-100 text-slate-700';
+        if (po.status === 'APPROVED') badgeClass = 'bg-emerald-100 text-emerald-800';
+        else if (po.status === 'PARTIALLY_RECEIVED') badgeClass = 'bg-amber-100 text-amber-800';
+        else if (po.status === 'RECEIVED') badgeClass = 'bg-purple-100 text-purple-800';
+        else if (po.status === 'CANCELLED') badgeClass = 'bg-rose-100 text-rose-800';
+
+        const dateStr = po.order_date ? new Date(po.order_date).toLocaleDateString('id-ID') : '-';
+        const isManagerOrAdmin = currentUser.role === 'ADMIN' || currentUser.role === 'MANAGER';
+
+        let actionBtns = `
+            <button onclick="openPoDetail(${po.po_id})" class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg font-semibold text-[11px] transition">
+                Detail
+            </button>
+        `;
+
+        if (po.status === 'DRAFT' && isManagerOrAdmin) {
+            actionBtns += `
+                <button onclick="approvePurchaseOrder(${po.po_id}, '${escapeHtml(po.po_number)}')" class="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-semibold text-[11px] transition shadow-xs">
+                    Setujui
+                </button>
+            `;
+        }
+
+        if (po.status === 'APPROVED' || po.status === 'PARTIALLY_RECEIVED') {
+            actionBtns += `
+                <button onclick="openReceivePoModal(${po.po_id})" class="px-2.5 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold text-[11px] transition shadow-xs">
+                    Terima Masuk
+                </button>
+            `;
+        }
+
+        if ((po.status === 'DRAFT' || po.status === 'APPROVED') && isManagerOrAdmin) {
+            actionBtns += `
+                <button onclick="cancelPurchaseOrder(${po.po_id}, '${escapeHtml(po.po_number)}')" class="px-2.5 py-1 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-lg font-semibold text-[11px] transition">
+                    Batal
+                </button>
+            `;
+        }
+
+        tr.innerHTML = `
+            <td class="p-3 font-mono font-bold text-blue-700">${escapeHtml(po.po_number)}</td>
+            <td class="p-3 font-medium text-slate-900">${escapeHtml(po.supplier_name)}</td>
+            <td class="p-3 text-slate-600">${escapeHtml(po.facility_name)}</td>
+            <td class="p-3 text-slate-500">${dateStr}</td>
+            <td class="p-3 text-right font-mono font-bold text-slate-900">Rp ${Number(po.total_amount || 0).toLocaleString('id-ID')}</td>
+            <td class="p-3 text-center">
+                <span class="font-bold text-slate-800">${po.total_received_qty || 0}</span> / <span class="text-slate-400">${po.total_ordered_qty || 0}</span> Unit
+            </td>
+            <td class="p-3 text-center">
+                <span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold ${badgeClass}">${po.status}</span>
+            </td>
+            <td class="p-3 text-right">
+                <div class="flex items-center justify-end gap-1.5">${actionBtns}</div>
+            </td>
+        `;
+        tbody.appendChild(tr);
+    });
+}
+
+async function openCreatePoModal() {
+    if (currentUser.role === 'STAFF') {
+        showToast('Akses ditolak: Staf operasional tidak memiliki izin membuat Purchase Order.', 'error');
+        return;
+    }
+
+    await Promise.all([fetchSuppliers(), loadFacilities(), fetchProducts()]);
+
+    const supSelect = document.getElementById('po-supplier-id');
+    const facSelect = document.getElementById('po-facility-id');
+
+    if (supSelect) {
+        supSelect.innerHTML = `<option value="">Pilih Vendor / Supplier...</option>`;
+        currentSuppliers.forEach(s => {
+            supSelect.innerHTML += `<option value="${s.supplier_id}">${escapeHtml(s.supplier_code)} - ${escapeHtml(s.supplier_name)}</option>`;
+        });
+    }
+
+    if (facSelect) {
+        facSelect.innerHTML = `<option value="">Pilih Fasilitas Gudang Tujuan...</option>`;
+        currentFacilities.forEach(f => {
+            facSelect.innerHTML += `<option value="${f.facility_id}">${escapeHtml(f.facility_code)} - ${escapeHtml(f.facility_name)} (${f.city})</option>`;
+        });
+    }
+
+    const tbody = document.getElementById('po-items-table-body');
+    if (tbody) tbody.innerHTML = '';
+    addPoItemRow();
+
+    document.getElementById('form-create-po').reset();
+    recalculatePoTotal();
+    openModal('modal-create-po');
+}
+
+function addPoItemRow() {
+    const tbody = document.getElementById('po-items-table-body');
+    if (!tbody) return;
+
+    const tr = document.createElement('tr');
+    tr.className = 'po-item-row';
+
+    const optionsHtml = currentProducts.map(p => `
+        <option value="${escapeHtml(p.product_id)}" data-cost="${p.cost_price || 0}">
+            ${escapeHtml(p.product_id)} - ${escapeHtml(p.product_name)} (${escapeHtml(p.unit)})
+        </option>
+    `).join('');
+
+    tr.innerHTML = `
+        <td class="p-1.5">
+            <select class="po-prod-select w-full bg-white border border-slate-300 rounded-lg p-1.5 text-xs outline-none" onchange="onPoProductSelectChange(this)">
+                <option value="">Pilih Produk SKU...</option>
+                ${optionsHtml}
+            </select>
+        </td>
+        <td class="p-1.5">
+            <input type="number" min="1" value="1" class="po-qty-input w-full bg-white border border-slate-300 rounded-lg p-1.5 text-xs text-right outline-none font-bold" oninput="recalculatePoTotal()">
+        </td>
+        <td class="p-1.5">
+            <input type="number" min="0" step="1000" value="0" class="po-cost-input w-full bg-white border border-slate-300 rounded-lg p-1.5 text-xs text-right outline-none font-mono" oninput="recalculatePoTotal()">
+        </td>
+        <td class="p-1.5 text-right font-mono font-bold text-slate-800 po-subtotal-cell">
+            Rp 0
+        </td>
+        <td class="p-1.5 text-center">
+            <button type="button" onclick="removePoItemRow(this)" class="text-rose-500 hover:text-rose-700 font-bold text-sm">&times;</button>
+        </td>
+    `;
+    tbody.appendChild(tr);
+}
+
+function onPoProductSelectChange(selectElem) {
+    const tr = selectElem.closest('tr');
+    const selectedOption = selectElem.options[selectElem.selectedIndex];
+    const defaultCost = selectedOption.getAttribute('data-cost') || 0;
+    const costInput = tr.querySelector('.po-cost-input');
+    if (costInput && Number(costInput.value) === 0) {
+        costInput.value = defaultCost;
+    }
+    recalculatePoTotal();
+}
+
+function removePoItemRow(btn) {
+    const tr = btn.closest('tr');
+    const tbody = document.getElementById('po-items-table-body');
+    if (tbody.querySelectorAll('tr').length > 1) {
+        tr.remove();
+        recalculatePoTotal();
+    } else {
+        showToast('Minimal harus ada satu item pada Purchase Order.', 'warning');
+    }
+}
+
+function recalculatePoTotal() {
+    let grandTotal = 0;
+    const rows = document.querySelectorAll('.po-item-row');
+
+    rows.forEach(row => {
+        const qty = parseInt(row.querySelector('.po-qty-input')?.value || 0, 10);
+        const cost = parseFloat(row.querySelector('.po-cost-input')?.value || 0);
+        const subtotal = Math.max(0, qty) * Math.max(0, cost);
+        grandTotal += subtotal;
+
+        const subtotalCell = row.querySelector('.po-subtotal-cell');
+        if (subtotalCell) {
+            subtotalCell.innerText = `Rp ${subtotal.toLocaleString('id-ID')}`;
+        }
+    });
+
+    const display = document.getElementById('po-total-calc-display');
+    if (display) {
+        display.innerText = `Rp ${grandTotal.toLocaleString('id-ID')}`;
+    }
+}
+
+async function handleCreatePurchaseOrder(event) {
+    event.preventDefault();
+
+    const supplierId = document.getElementById('po-supplier-id').value;
+    const facilityId = document.getElementById('po-facility-id').value;
+    const expectedDate = document.getElementById('po-expected-date').value;
+    const notes = document.getElementById('po-notes').value;
+
+    const rows = document.querySelectorAll('.po-item-row');
+    const items = [];
+
+    rows.forEach(r => {
+        const prodId = r.querySelector('.po-prod-select')?.value;
+        const qty = parseInt(r.querySelector('.po-qty-input')?.value, 10);
+        const cost = parseFloat(r.querySelector('.po-cost-input')?.value);
+
+        if (prodId && qty > 0) {
+            items.push({
+                product_id: prodId,
+                ordered_quantity: qty,
+                unit_cost: isNaN(cost) ? 0 : cost
+            });
+        }
+    });
+
+    if (items.length === 0) {
+        showToast('Wajib memasukkan setidaknya 1 item produk pada Purchase Order.', 'error');
+        return;
+    }
+
+    const btn = document.getElementById('btn-submit-po');
+    btn.disabled = true;
+
+    try {
+        const res = await fetch('/api/orders/purchase', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${authToken || localStorage.getItem('supplysync_token') || ''}`
+            },
+            body: JSON.stringify({
+                supplier_id: supplierId,
+                facility_id: facilityId,
+                expected_delivery_date: expectedDate || null,
+                notes,
+                items
+            })
+        });
+
+        const json = await res.json();
+        if (json.status === 'Success') {
+            showToast(`Purchase Order #${json.data.po_number} berhasil dibuat!`, 'success');
+            closeModal('modal-create-po');
+            loadPurchaseOrdersList();
+        } else {
+            showToast(json.message || 'Gagal membuat PO.', 'error');
+        }
+    } catch (err) {
+        showToast('Kesalahan jaringan: ' + err.message, 'error');
+    } finally {
+        btn.disabled = false;
+    }
+}
+
+async function approvePurchaseOrder(poId, poNumber) {
+    if (!confirm(`Apakah Anda yakin ingin menyetujui Purchase Order #${poNumber}?`)) return;
+
+    try {
+        const res = await fetch(`/api/orders/purchase/${poId}/approve`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${authToken || localStorage.getItem('supplysync_token') || ''}` }
+        });
+        const json = await res.json();
+
+        if (json.status === 'Success') {
+            showToast(`PO #${poNumber} berhasil disetujui (Status: APPROVED)!`, 'success');
+            loadPurchaseOrdersList();
+        } else {
+            showToast(json.message || 'Gagal menyetujui PO.', 'error');
+        }
+    } catch (err) {
+        showToast('Kesalahan: ' + err.message, 'error');
+    }
+}
+
+async function openReceivePoModal(poId) {
+    try {
+        const res = await fetch(`/api/orders/purchase/${poId}`, {
+            headers: { 'Authorization': `Bearer ${authToken || localStorage.getItem('supplysync_token') || ''}` }
+        });
+        const json = await res.json();
+
+        if (json.status !== 'Success' || !json.data) {
+            showToast('Gagal memuat rincian PO.', 'error');
+            return;
+        }
+
+        const po = json.data;
+        selectedPoDetail = po;
+
+        document.getElementById('rcv-po-id').value = po.po_id;
+        document.getElementById('rcv-po-number').innerText = po.po_number;
+        document.getElementById('rcv-po-supplier').innerText = po.supplier_name;
+        document.getElementById('rcv-po-facility').innerText = po.facility_name;
+
+        await fetchLocations();
+
+        const tbody = document.getElementById('rcv-po-items-tbody');
+        tbody.innerHTML = '';
+
+        const locationOptions = currentLocations.map(l => `
+            <option value="${l.location_id}">${escapeHtml(l.location_code)} (${escapeHtml(l.zone_name)})</option>
+        `).join('');
+
+        const defaultExp = new Date(Date.now() + 180 * 24 * 3600 * 1000).toISOString().split('T')[0];
+
+        po.items.forEach(it => {
+            const remaining = it.ordered_quantity - it.received_quantity;
+            if (remaining <= 0) return;
+
+            const tr = document.createElement('tr');
+            tr.className = 'rcv-po-item-row';
+            tr.setAttribute('data-product-id', it.product_id);
+
+            tr.innerHTML = `
+                <td class="p-2.5 font-bold text-slate-900">
+                    <div>${escapeHtml(it.product_name)}</div>
+                    <div class="text-[10px] text-slate-400 font-mono">${escapeHtml(it.product_id)} &bull; ${escapeHtml(it.unit)}</div>
+                </td>
+                <td class="p-2.5 text-center font-bold text-amber-600">
+                    ${remaining}
+                </td>
+                <td class="p-2.5 text-center">
+                    <input type="number" min="0" max="${remaining}" value="${remaining}" class="rcv-po-qty-input w-full bg-slate-50 border border-slate-300 rounded-lg p-1.5 text-xs text-center font-bold outline-none">
+                </td>
+                <td class="p-2.5">
+                    <select class="rcv-po-loc-select w-full bg-slate-50 border border-slate-300 rounded-lg p-1.5 text-xs outline-none">
+                        ${locationOptions}
+                    </select>
+                </td>
+                <td class="p-2.5">
+                    <input type="date" value="${defaultExp}" class="rcv-po-exp-input w-full bg-slate-50 border border-slate-300 rounded-lg p-1.5 text-xs outline-none">
+                </td>
+            `;
+            tbody.appendChild(tr);
+        });
+
+        openModal('modal-receive-po');
+    } catch (err) {
+        showToast('Gagal membuka modal penerimaan PO: ' + err.message, 'error');
+    }
+}
+
+async function submitReceivePurchaseOrder() {
+    const poId = document.getElementById('rcv-po-id').value;
+    const notes = document.getElementById('rcv-po-notes').value;
+    const rows = document.querySelectorAll('.rcv-po-item-row');
+    const items = [];
+
+    rows.forEach(r => {
+        const prodId = r.getAttribute('data-product-id');
+        const qty = parseInt(r.querySelector('.rcv-po-qty-input')?.value, 10);
+        const locId = r.querySelector('.rcv-po-loc-select')?.value;
+        const expDate = r.querySelector('.rcv-po-exp-input')?.value;
+
+        if (prodId && qty > 0) {
+            items.push({
+                product_id: prodId,
+                received_quantity: qty,
+                location_id: locId,
+                expired_date: expDate
+            });
+        }
+    });
+
+    if (items.length === 0) {
+        showToast('Tidak ada kuantitas barang yang diterima (Kuantitas > 0).', 'warning');
+        return;
+    }
+
+    const btn = document.getElementById('btn-submit-receive-po');
+    btn.disabled = true;
+
+    try {
+        const res = await fetch(`/api/orders/purchase/${poId}/receive`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${authToken || localStorage.getItem('supplysync_token') || ''}`
+            },
+            body: JSON.stringify({ items, notes })
+        });
+
+        const json = await res.json();
+        if (json.status === 'Success') {
+            showToast(`Penerimaan barang PO berhasil diproses! Status PO: ${json.data.status}`, 'success');
+            closeModal('modal-receive-po');
+            loadPurchaseOrdersList();
+            loadDashboardData();
+        } else {
+            showToast(json.message || 'Gagal memproses penerimaan PO.', 'error');
+        }
+    } catch (err) {
+        showToast('Kesalahan jaringan: ' + err.message, 'error');
+    } finally {
+        btn.disabled = false;
+    }
+}
+
+async function openPoDetail(poId) {
+    try {
+        const res = await fetch(`/api/orders/purchase/${poId}`, {
+            headers: { 'Authorization': `Bearer ${authToken || localStorage.getItem('supplysync_token') || ''}` }
+        });
+        const json = await res.json();
+        if (json.status !== 'Success' || !json.data) return;
+
+        const po = json.data;
+        selectedPoDetail = po;
+
+        document.getElementById('dtl-po-number').innerText = po.po_number;
+        document.getElementById('dtl-po-supplier').innerText = `${po.supplier_name} (${po.supplier_code})`;
+        document.getElementById('dtl-po-facility').innerText = `${po.facility_name} (${po.facility_code})`;
+        document.getElementById('dtl-po-date').innerText = po.order_date ? new Date(po.order_date).toLocaleDateString('id-ID') : '-';
+        document.getElementById('dtl-po-total').innerText = `Rp ${Number(po.total_amount || 0).toLocaleString('id-ID')}`;
+        document.getElementById('dtl-po-creator').innerText = po.created_by_name || '-';
+        document.getElementById('dtl-po-notes').innerText = po.notes || '-';
+
+        let badgeClass = 'bg-slate-100 text-slate-700';
+        if (po.status === 'APPROVED') badgeClass = 'bg-emerald-100 text-emerald-800';
+        else if (po.status === 'PARTIALLY_RECEIVED') badgeClass = 'bg-amber-100 text-amber-800';
+        else if (po.status === 'RECEIVED') badgeClass = 'bg-purple-100 text-purple-800';
+        else if (po.status === 'CANCELLED') badgeClass = 'bg-rose-100 text-rose-800';
+
+        document.getElementById('dtl-po-status-badge').className = `px-2.5 py-0.5 rounded-full text-[10px] font-bold ${badgeClass}`;
+        document.getElementById('dtl-po-status-badge').innerText = po.status;
+
+        const tbody = document.getElementById('dtl-po-items-tbody');
+        tbody.innerHTML = (po.items || []).map(it => `
+            <tr>
+                <td class="p-2.5">
+                    <div class="font-bold text-slate-900">${escapeHtml(it.product_name)}</div>
+                    <div class="text-[10px] text-slate-400 font-mono">${escapeHtml(it.product_id)} &bull; ${escapeHtml(it.unit)}</div>
+                </td>
+                <td class="p-2.5 text-right font-bold text-slate-800">${it.ordered_quantity}</td>
+                <td class="p-2.5 text-right font-bold ${it.received_quantity >= it.ordered_quantity ? 'text-emerald-600' : 'text-amber-600'}">${it.received_quantity}</td>
+                <td class="p-2.5 text-right font-mono text-slate-600">Rp ${Number(it.unit_cost || 0).toLocaleString('id-ID')}</td>
+                <td class="p-2.5 text-right font-mono font-bold text-slate-900">Rp ${(Number(it.ordered_quantity || 0) * Number(it.unit_cost || 0)).toLocaleString('id-ID')}</td>
+            </tr>
+        `).join('');
+
+        openModal('modal-po-detail');
+    } catch (err) {
+        showToast('Gagal memuat detail PO: ' + err.message, 'error');
+    }
+}
+
+function printCurrentPoDocument() {
+    if (!selectedPoDetail) return;
+    if (typeof printPurchaseOrderDocument === 'function') {
+        printPurchaseOrderDocument(selectedPoDetail);
+    } else {
+        showToast('Modul cetak dokumen PO belum tersedia.', 'error');
+    }
+}
+
+async function cancelPurchaseOrder(poId, poNumber) {
+    const reason = prompt(`Masukkan alasan pembatalan Purchase Order #${poNumber}:`, 'Pemasok tidak sanggup memenuhi jadwal pengiriman');
+    if (!reason) return;
+
+    try {
+        const res = await fetch(`/api/orders/purchase/${poId}/cancel`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${authToken || localStorage.getItem('supplysync_token') || ''}`
+            },
+            body: JSON.stringify({ cancel_reason: reason })
+        });
+        const json = await res.json();
+
+        if (json.status === 'Success') {
+            showToast(`PO #${poNumber} berhasil dibatalkan.`, 'success');
+            loadPurchaseOrdersList();
+        } else {
+            showToast(json.message || 'Gagal membatalkan PO.', 'error');
+        }
+    } catch (err) {
+        showToast('Kesalahan: ' + err.message, 'error');
+    }
+}
+
+// --- B. SALES ORDER (SO) HANDLERS ---
+
+async function loadSalesOrdersList() {
+    const tbody = document.getElementById('so-tbody');
+    if (!tbody) return;
+
+    try {
+        const filterStatus = document.getElementById('filter-so-status')?.value || '';
+        const url = filterStatus ? `/api/orders/sales?status=${encodeURIComponent(filterStatus)}` : '/api/orders/sales';
+        
+        const res = await fetch(url, {
+            headers: { 'Authorization': `Bearer ${authToken || localStorage.getItem('supplysync_token') || ''}` }
+        });
+        const json = await res.json();
+
+        if (json.status === 'Success') {
+            currentSalesOrders = json.data || [];
+            renderSalesOrdersTable(currentSalesOrders);
+
+            // KPI Cards Update
+            const total = currentSalesOrders.length;
+            const confirmed = currentSalesOrders.filter(s => s.status === 'CONFIRMED').length;
+            const dispatched = currentSalesOrders.filter(s => s.status === 'DISPATCHED').length;
+            const cancelled = currentSalesOrders.filter(s => s.status === 'CANCELLED').length;
+            const totalVal = currentSalesOrders.reduce((sum, s) => sum + Number(s.total_amount || 0), 0);
+
+            document.getElementById('stat-so-total').innerText = `${total} SO`;
+            document.getElementById('stat-so-val').innerText = `Rp ${totalVal.toLocaleString('id-ID')} Omzet`;
+            document.getElementById('stat-so-confirmed').innerText = `${confirmed} SO`;
+            document.getElementById('stat-so-dispatched').innerText = `${dispatched} SO`;
+            document.getElementById('stat-so-cancelled').innerText = `${cancelled} SO`;
+        }
+    } catch (err) {
+        tbody.innerHTML = `<tr><td colspan="8" class="p-8 text-center text-rose-500">Gagal memuat SO: ${escapeHtml(err.message)}</td></tr>`;
+    }
+}
+
+function renderSalesOrdersTable(orders) {
+    const tbody = document.getElementById('so-tbody');
+    if (!tbody) return;
+    tbody.innerHTML = '';
+
+    if (!orders || orders.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="8" class="p-8 text-center text-slate-400">Belum ada dokumen Sales Order (SO) pada status ini.</td></tr>`;
+        return;
+    }
+
+    orders.forEach(so => {
+        const tr = document.createElement('tr');
+        tr.className = 'hover:bg-slate-50 transition border-b border-slate-100';
+
+        let badgeClass = 'bg-slate-100 text-slate-700';
+        if (so.status === 'CONFIRMED') badgeClass = 'bg-blue-100 text-blue-800';
+        else if (so.status === 'DISPATCHED') badgeClass = 'bg-emerald-100 text-emerald-800';
+        else if (so.status === 'CANCELLED') badgeClass = 'bg-rose-100 text-rose-800';
+
+        const dateStr = so.order_date ? new Date(so.order_date).toLocaleDateString('id-ID') : '-';
+        const isManagerOrAdmin = currentUser.role === 'ADMIN' || currentUser.role === 'MANAGER';
+
+        let actionBtns = `
+            <button onclick="openSoDetail(${so.so_id})" class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg font-semibold text-[11px] transition">
+                Detail
+            </button>
+        `;
+
+        if (so.status === 'DRAFT' && isManagerOrAdmin) {
+            actionBtns += `
+                <button onclick="confirmSalesOrder(${so.so_id}, '${escapeHtml(so.so_number)}')" class="px-2.5 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold text-[11px] transition shadow-xs">
+                    Konfirmasi
+                </button>
+            `;
+        }
+
+        if (so.status === 'CONFIRMED') {
+            actionBtns += `
+                <button onclick="dispatchSalesOrder(${so.so_id}, '${escapeHtml(so.so_number)}')" class="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-semibold text-[11px] transition shadow-xs">
+                    Dispatch FEFO
+                </button>
+            `;
+        }
+
+        if ((so.status === 'DRAFT' || so.status === 'CONFIRMED') && isManagerOrAdmin) {
+            actionBtns += `
+                <button onclick="cancelSalesOrder(${so.so_id}, '${escapeHtml(so.so_number)}')" class="px-2.5 py-1 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-lg font-semibold text-[11px] transition">
+                    Batal
+                </button>
+            `;
+        }
+
+        tr.innerHTML = `
+            <td class="p-3 font-mono font-bold text-emerald-700">${escapeHtml(so.so_number)}</td>
+            <td class="p-3 font-medium text-slate-900">${escapeHtml(so.customer_name)}</td>
+            <td class="p-3 text-slate-600">${escapeHtml(so.facility_name)}</td>
+            <td class="p-3 text-slate-500">${dateStr}</td>
+            <td class="p-3 text-right font-mono font-bold text-slate-900">Rp ${Number(so.total_amount || 0).toLocaleString('id-ID')}</td>
+            <td class="p-3 text-center font-bold text-slate-800">${so.total_requested_qty || 0} Unit</td>
+            <td class="p-3 text-center">
+                <span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold ${badgeClass}">${so.status}</span>
+            </td>
+            <td class="p-3 text-right">
+                <div class="flex items-center justify-end gap-1.5">${actionBtns}</div>
+            </td>
+        `;
+        tbody.appendChild(tr);
+    });
+}
+
+async function openCreateSoModal() {
+    if (currentUser.role === 'STAFF') {
+        showToast('Akses ditolak: Staf operasional tidak memiliki izin membuat Sales Order.', 'error');
+        return;
+    }
+
+    await Promise.all([loadFacilities(), fetchProducts()]);
+
+    const facSelect = document.getElementById('so-facility-id');
+    if (facSelect) {
+        facSelect.innerHTML = `<option value="">Pilih Gudang Asal Pengiriman...</option>`;
+        currentFacilities.forEach(f => {
+            facSelect.innerHTML += `<option value="${f.facility_id}">${escapeHtml(f.facility_code)} - ${escapeHtml(f.facility_name)} (${f.city})</option>`;
+        });
+    }
+
+    const tbody = document.getElementById('so-items-table-body');
+    if (tbody) tbody.innerHTML = '';
+    addSoItemRow();
+
+    document.getElementById('form-create-so').reset();
+    recalculateSoTotal();
+    openModal('modal-create-so');
+}
+
+function addSoItemRow() {
+    const tbody = document.getElementById('so-items-table-body');
+    if (!tbody) return;
+
+    const tr = document.createElement('tr');
+    tr.className = 'so-item-row';
+
+    const optionsHtml = currentProducts.map(p => `
+        <option value="${escapeHtml(p.product_id)}" data-price="${(p.cost_price || 0) * 1.25}">
+            ${escapeHtml(p.product_id)} - ${escapeHtml(p.product_name)} (Stok: ${p.total_stock || 0} ${escapeHtml(p.unit)})
+        </option>
+    `).join('');
+
+    tr.innerHTML = `
+        <td class="p-1.5">
+            <select class="so-prod-select w-full bg-white border border-slate-300 rounded-lg p-1.5 text-xs outline-none" onchange="onSoProductSelectChange(this)">
+                <option value="">Pilih Produk SKU...</option>
+                ${optionsHtml}
+            </select>
+        </td>
+        <td class="p-1.5">
+            <input type="number" min="1" value="1" class="so-qty-input w-full bg-white border border-slate-300 rounded-lg p-1.5 text-xs text-right outline-none font-bold" oninput="recalculateSoTotal()">
+        </td>
+        <td class="p-1.5">
+            <input type="number" min="0" step="1000" value="0" class="so-price-input w-full bg-white border border-slate-300 rounded-lg p-1.5 text-xs text-right outline-none font-mono" oninput="recalculateSoTotal()">
+        </td>
+        <td class="p-1.5 text-right font-mono font-bold text-slate-800 so-subtotal-cell">
+            Rp 0
+        </td>
+        <td class="p-1.5 text-center">
+            <button type="button" onclick="removeSoItemRow(this)" class="text-rose-500 hover:text-rose-700 font-bold text-sm">&times;</button>
+        </td>
+    `;
+    tbody.appendChild(tr);
+}
+
+function onSoProductSelectChange(selectElem) {
+    const tr = selectElem.closest('tr');
+    const selectedOption = selectElem.options[selectElem.selectedIndex];
+    const defaultPrice = selectedOption.getAttribute('data-price') || 0;
+    const priceInput = tr.querySelector('.so-price-input');
+    if (priceInput && Number(priceInput.value) === 0) {
+        priceInput.value = Math.round(Number(defaultPrice));
+    }
+    recalculateSoTotal();
+}
+
+function removeSoItemRow(btn) {
+    const tr = btn.closest('tr');
+    const tbody = document.getElementById('so-items-table-body');
+    if (tbody.querySelectorAll('tr').length > 1) {
+        tr.remove();
+        recalculateSoTotal();
+    } else {
+        showToast('Minimal harus ada satu item pada Sales Order.', 'warning');
+    }
+}
+
+function recalculateSoTotal() {
+    let grandTotal = 0;
+    const rows = document.querySelectorAll('.so-item-row');
+
+    rows.forEach(row => {
+        const qty = parseInt(row.querySelector('.so-qty-input')?.value || 0, 10);
+        const price = parseFloat(row.querySelector('.so-price-input')?.value || 0);
+        const subtotal = Math.max(0, qty) * Math.max(0, price);
+        grandTotal += subtotal;
+
+        const subtotalCell = row.querySelector('.so-subtotal-cell');
+        if (subtotalCell) {
+            subtotalCell.innerText = `Rp ${subtotal.toLocaleString('id-ID')}`;
+        }
+    });
+
+    const display = document.getElementById('so-total-calc-display');
+    if (display) {
+        display.innerText = `Rp ${grandTotal.toLocaleString('id-ID')}`;
+    }
+}
+
+async function handleCreateSalesOrder(event) {
+    event.preventDefault();
+
+    const customerName = document.getElementById('so-customer-name').value;
+    const customerPhone = document.getElementById('so-customer-phone').value;
+    const customerAddress = document.getElementById('so-customer-address').value;
+    const facilityId = document.getElementById('so-facility-id').value;
+    const deliveryDate = document.getElementById('so-delivery-date').value;
+    const notes = document.getElementById('so-notes').value;
+
+    const rows = document.querySelectorAll('.so-item-row');
+    const items = [];
+
+    rows.forEach(r => {
+        const prodId = r.querySelector('.so-prod-select')?.value;
+        const qty = parseInt(r.querySelector('.so-qty-input')?.value, 10);
+        const price = parseFloat(r.querySelector('.so-price-input')?.value);
+
+        if (prodId && qty > 0) {
+            items.push({
+                product_id: prodId,
+                requested_quantity: qty,
+                unit_price: isNaN(price) ? 0 : price
+            });
+        }
+    });
+
+    if (items.length === 0) {
+        showToast('Wajib memasukkan setidaknya 1 item produk pada Sales Order.', 'error');
+        return;
+    }
+
+    const btn = document.getElementById('btn-submit-so');
+    btn.disabled = true;
+
+    try {
+        const res = await fetch('/api/orders/sales', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${authToken || localStorage.getItem('supplysync_token') || ''}`
+            },
+            body: JSON.stringify({
+                facility_id: facilityId,
+                customer_name: customerName,
+                customer_phone: customerPhone,
+                customer_address: customerAddress,
+                delivery_date: deliveryDate || null,
+                notes,
+                items
+            })
+        });
+
+        const json = await res.json();
+        if (json.status === 'Success') {
+            showToast(`Sales Order #${json.data.so_number} berhasil dibuat!`, 'success');
+            closeModal('modal-create-so');
+            loadSalesOrdersList();
+        } else {
+            showToast(json.message || 'Gagal membuat SO.', 'error');
+        }
+    } catch (err) {
+        showToast('Kesalahan jaringan: ' + err.message, 'error');
+    } finally {
+        btn.disabled = false;
+    }
+}
+
+async function confirmSalesOrder(soId, soNumber) {
+    if (!confirm(`Konfirmasi Sales Order #${soNumber}?`)) return;
+
+    try {
+        const res = await fetch(`/api/orders/sales/${soId}/confirm`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${authToken || localStorage.getItem('supplysync_token') || ''}` }
+        });
+        const json = await res.json();
+
+        if (json.status === 'Success') {
+            showToast(`SO #${soNumber} berhasil dikonfirmasi (Status: CONFIRMED)!`, 'success');
+            loadSalesOrdersList();
+        } else {
+            showToast(json.message || 'Gagal mengonfirmasi SO.', 'error');
+        }
+    } catch (err) {
+        showToast('Kesalahan: ' + err.message, 'error');
+    }
+}
+
+async function dispatchSalesOrder(soId, soNumber) {
+    if (!confirm(`Apakah armada pengiriman siap? Tindakan ini akan memotong stok di rak gudang secara otomatis berdasarkan prioritas FEFO untuk SO #${soNumber}.`)) return;
+
+    try {
+        const res = await fetch(`/api/orders/sales/${soId}/dispatch`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${authToken || localStorage.getItem('supplysync_token') || ''}`
+            },
+            body: JSON.stringify({ notes: 'Pengiriman pesanan terjadwal' })
+        });
+        const json = await res.json();
+
+        if (json.status === 'Success') {
+            showToast(`SO #${soNumber} berhasil dikirim! Alokasi stok FEFO telah terpotong.`, 'success');
+            loadSalesOrdersList();
+            loadDashboardData();
+        } else {
+            showToast(json.message || 'Gagal memproses dispatch SO.', 'error');
+        }
+    } catch (err) {
+        showToast('Kesalahan: ' + err.message, 'error');
+    }
+}
+
+async function openSoDetail(soId) {
+    try {
+        const res = await fetch(`/api/orders/sales/${soId}`, {
+            headers: { 'Authorization': `Bearer ${authToken || localStorage.getItem('supplysync_token') || ''}` }
+        });
+        const json = await res.json();
+        if (json.status !== 'Success' || !json.data) return;
+
+        const so = json.data;
+        selectedSoDetail = so;
+
+        document.getElementById('dtl-so-number').innerText = so.so_number;
+        document.getElementById('dtl-so-customer').innerText = `${so.customer_name} (${so.customer_phone || '-'})`;
+        document.getElementById('dtl-so-facility').innerText = `${so.facility_name} (${so.facility_code})`;
+        document.getElementById('dtl-so-date').innerText = so.order_date ? new Date(so.order_date).toLocaleDateString('id-ID') : '-';
+        document.getElementById('dtl-so-total').innerText = `Rp ${Number(so.total_amount || 0).toLocaleString('id-ID')}`;
+        document.getElementById('dtl-so-delivery').innerText = so.delivery_date ? new Date(so.delivery_date).toLocaleDateString('id-ID') : 'Segera';
+        document.getElementById('dtl-so-address').innerText = so.customer_address || '-';
+        document.getElementById('dtl-so-notes').innerText = so.notes || '-';
+
+        let badgeClass = 'bg-slate-100 text-slate-700';
+        if (so.status === 'CONFIRMED') badgeClass = 'bg-blue-100 text-blue-800';
+        else if (so.status === 'DISPATCHED') badgeClass = 'bg-emerald-100 text-emerald-800';
+        else if (so.status === 'CANCELLED') badgeClass = 'bg-rose-100 text-rose-800';
+
+        document.getElementById('dtl-so-status-badge').className = `px-2.5 py-0.5 rounded-full text-[10px] font-bold ${badgeClass}`;
+        document.getElementById('dtl-so-status-badge').innerText = so.status;
+
+        const tbody = document.getElementById('dtl-so-items-tbody');
+        tbody.innerHTML = (so.items || []).map(it => `
+            <tr>
+                <td class="p-2.5">
+                    <div class="font-bold text-slate-900">${escapeHtml(it.product_name)}</div>
+                    <div class="text-[10px] text-slate-400 font-mono">${escapeHtml(it.product_id)} &bull; ${escapeHtml(it.unit)}</div>
+                </td>
+                <td class="p-2.5 text-right font-bold text-slate-800">${it.requested_quantity}</td>
+                <td class="p-2.5 text-right font-mono text-slate-600">Rp ${Number(it.unit_price || 0).toLocaleString('id-ID')}</td>
+                <td class="p-2.5 text-right font-mono font-bold text-slate-900">Rp ${(Number(it.requested_quantity || 0) * Number(it.unit_price || 0)).toLocaleString('id-ID')}</td>
+            </tr>
+        `).join('');
+
+        openModal('modal-so-detail');
+    } catch (err) {
+        showToast('Gagal memuat detail SO: ' + err.message, 'error');
+    }
+}
+
+function printCurrentSoDocument() {
+    if (!selectedSoDetail) return;
+    if (typeof printSalesOrderDocument === 'function') {
+        printSalesOrderDocument(selectedSoDetail);
+    } else {
+        showToast('Modul cetak dokumen SO belum tersedia.', 'error');
+    }
+}
+
+async function cancelSalesOrder(soId, soNumber) {
+    const reason = prompt(`Masukkan alasan pembatalan Sales Order #${soNumber}:`, 'Pelanggan membatalkan pesanan');
+    if (!reason) return;
+
+    try {
+        const res = await fetch(`/api/orders/sales/${soId}/cancel`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${authToken || localStorage.getItem('supplysync_token') || ''}`
+            },
+            body: JSON.stringify({ cancel_reason: reason })
+        });
+        const json = await res.json();
+
+        if (json.status === 'Success') {
+            showToast(`SO #${soNumber} berhasil dibatalkan.`, 'success');
+            loadSalesOrdersList();
+        } else {
+            showToast(json.message || 'Gagal membatalkan SO.', 'error');
+        }
+    } catch (err) {
+        showToast('Kesalahan: ' + err.message, 'error');
     }
 }
 

@@ -687,12 +687,314 @@ function printTransferDocument(transfer) {
     printWindow.document.close();
 }
 
+/**
+ * Cetak Dokumen Resmi Surat Pesanan Pembelian / Purchase Order (PO)
+ */
+function printPurchaseOrderDocument(po) {
+    if (!po) return;
+    const poNum = po.po_number || `PO-${Date.now()}`;
+    const dateStr = po.order_date ? new Date(po.order_date).toLocaleDateString('id-ID', { dateStyle: 'full' }) : new Date().toLocaleDateString('id-ID', { dateStyle: 'full' });
+    const expectedStr = po.expected_delivery_date ? new Date(po.expected_delivery_date).toLocaleDateString('id-ID', { dateStyle: 'long' }) : 'Sesuai Kesepakatan';
+    const creator = po.created_by_name || 'Staff Purchasing';
+    const approver = po.approved_by_name || 'Manager Gudang';
+    const supplierName = po.supplier_name || 'Vendor Resmi';
+    const notes = po.notes || 'Pengadaan stok persediaan gudang';
+
+    const barcodeSvg = typeof generateBarcodeSvg === 'function' 
+        ? generateBarcodeSvg(poNum, { height: 32, showText: true }) 
+        : `<div style="font-family: monospace; font-weight: bold;">${escDoc(poNum)}</div>`;
+
+    const printWindow = window.open('', '_blank', 'width=850,height=900');
+    if (!printWindow) {
+        alert('Gagal membuka jendela cetak. Izinkan pop-up pada peramban Anda.');
+        return;
+    }
+
+    const items = po.items || [];
+    let grandTotal = 0;
+    const rowsHtml = items.map((item, idx) => {
+        const subtotal = Number(item.ordered_quantity || 0) * Number(item.unit_cost || 0);
+        grandTotal += subtotal;
+        return `
+            <tr style="border-bottom: 1px solid #cbd5e1;">
+                <td style="padding: 9px; text-align: center;">${idx + 1}</td>
+                <td style="padding: 9px; font-family: monospace; font-weight: bold; color: #1e40af;">${escDoc(item.product_id)}</td>
+                <td style="padding: 9px; font-weight: 600;">${escDoc(item.product_name || item.product_id)}</td>
+                <td style="padding: 9px; text-align: center;">${escDoc(item.unit || 'Unit')}</td>
+                <td style="padding: 9px; text-align: right; font-weight: bold;">${item.ordered_quantity}</td>
+                <td style="padding: 9px; text-align: right; font-family: monospace;">Rp ${Number(item.unit_cost || 0).toLocaleString('id-ID')}</td>
+                <td style="padding: 9px; text-align: right; font-weight: bold; font-family: monospace;">Rp ${subtotal.toLocaleString('id-ID')}</td>
+            </tr>
+        `;
+    }).join('');
+
+    printWindow.document.write(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Purchase Order (PO) - ${escDoc(poNum)}</title>
+            <style>
+                @page { size: A4 portrait; margin: 12mm; }
+                body {
+                    font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
+                    color: #0f172a; margin: 0; padding: 16px; font-size: 12px;
+                }
+                .doc-container { border: 2px solid #0284c7; padding: 20px; border-radius: 8px; }
+                .header-table { width: 100%; border-bottom: 2px solid #0284c7; padding-bottom: 12px; margin-bottom: 16px; }
+                .info-box { background: #f0f9ff; border: 1px solid #bae6fd; padding: 10px; border-radius: 6px; font-size: 11px; }
+                .items-table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+                .items-table th { background: #0284c7; color: #ffffff; padding: 9px; text-align: left; font-size: 11px; text-transform: uppercase; }
+                .sig-box { width: 33.33%; text-align: center; padding: 15px 10px 5px; }
+                .sig-line { border-bottom: 1px solid #0f172a; width: 75%; margin: 55px auto 4px auto; }
+            </style>
+        </head>
+        <body onload="window.print()">
+            <div class="doc-container">
+                <table class="header-table">
+                    <tr>
+                        <td style="vertical-align: top;">
+                            <div style="font-size: 20px; font-weight: 800; color: #0284c7; letter-spacing: -0.5px;">SUPPLYNC WMS</div>
+                            <div style="font-size: 10px; color: #64748b; font-weight: 600; text-transform: uppercase;">Enterprise Warehouse & Supply Chain Management</div>
+                            <div style="font-size: 14px; font-weight: 700; color: #0f172a; margin-top: 6px;">SURAT PESANAN PEMBELIAN (PURCHASE ORDER)</div>
+                            <div style="display: inline-block; margin-top: 4px; padding: 2px 8px; background: #e0f2fe; color: #0369a1; border-radius: 4px; font-weight: bold; font-size: 10px;">
+                                STATUS: ${escDoc(po.status || 'DRAFT')}
+                            </div>
+                        </td>
+                        <td style="text-align: right; vertical-align: top;">
+                            <div style="display: inline-block; text-align: right;">
+                                ${barcodeSvg}
+                                <div style="font-size: 10px; color: #64748b; margin-top: 4px;">Tanggal Pesan: <b>${dateStr}</b></div>
+                                <div style="font-size: 10px; color: #0369a1; margin-top: 2px;">Ekspektasi Tiba: <b>${expectedStr}</b></div>
+                            </div>
+                        </td>
+                    </tr>
+                </table>
+
+                <table style="width: 100%; margin-bottom: 15px;" cellspacing="8">
+                    <tr>
+                        <td style="width: 50%; vertical-align: top;" class="info-box">
+                            <div style="font-weight: bold; color: #0369a1; text-transform: uppercase; font-size: 10px; margin-bottom: 4px;">Kepada Pemasok (Vendor):</div>
+                            <div style="font-size: 13px; font-weight: 800; color: #0f172a;">${escDoc(supplierName)}</div>
+                            <div>Kontak: ${escDoc(po.contact_person || '-')} &bull; Telp: ${escDoc(po.phone || '-')}</div>
+                            <div>Email: ${escDoc(po.email || '-')}</div>
+                        </td>
+                        <td style="width: 50%; vertical-align: top;" class="info-box">
+                            <div style="font-weight: bold; color: #0369a1; text-transform: uppercase; font-size: 10px; margin-bottom: 4px;">Kirim Ke Fasilitas Gudang:</div>
+                            <div style="font-size: 13px; font-weight: 800; color: #0f172a;">${escDoc(po.facility_name || 'Gudang Pusat Cakung')} (${escDoc(po.facility_code || 'WH-JKT-01')})</div>
+                            <div>Kota: ${escDoc(po.city || 'Jakarta')}</div>
+                            <div>Catatan: ${escDoc(notes)}</div>
+                        </td>
+                    </tr>
+                </table>
+
+                <table class="items-table">
+                    <thead>
+                        <tr>
+                            <th style="text-align: center; width: 35px;">No</th>
+                            <th style="width: 120px;">SKU Produk</th>
+                            <th>Deskripsi Produk</th>
+                            <th style="text-align: center; width: 60px;">Satuan</th>
+                            <th style="text-align: right; width: 70px;">Jumlah</th>
+                            <th style="text-align: right; width: 110px;">Harga Satuan</th>
+                            <th style="text-align: right; width: 120px;">Total (Rp)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${rowsHtml}
+                        <tr style="background: #f8fafc; font-weight: bold; font-size: 13px; border-top: 2px solid #0284c7;">
+                            <td colspan="6" style="padding: 10px; text-align: right; text-transform: uppercase;">Total Nilai Pesanan:</td>
+                            <td style="padding: 10px; text-align: right; color: #0284c7; font-family: monospace;">Rp ${(po.total_amount || grandTotal).toLocaleString('id-ID')}</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <table style="width: 100%; margin-top: 40px; border-collapse: collapse;">
+                    <tr>
+                        <td class="sig-box">
+                            <div style="font-weight: bold;">Dibuat Oleh (Purchasing)</div>
+                            <div class="sig-line"></div>
+                            <div style="font-size: 10px; color: #64748b;">${escDoc(creator)}</div>
+                        </td>
+                        <td class="sig-box">
+                            <div style="font-weight: bold;">Disetujui Oleh (Manager)</div>
+                            <div class="sig-line"></div>
+                            <div style="font-size: 10px; color: #64748b;">${escDoc(approver)}</div>
+                        </td>
+                        <td class="sig-box">
+                            <div style="font-weight: bold;">Konfirmasi Vendor (Pemasok)</div>
+                            <div class="sig-line"></div>
+                            <div style="font-size: 10px; color: #64748b;">(Tanda Tangan & Cap Perusahaan)</div>
+                        </td>
+                    </tr>
+                </table>
+
+                <div style="margin-top: 25px; text-align: center; font-size: 9px; color: #94a3b8; border-top: 1px solid #e2e8f0; padding-top: 6px;">
+                    Dokumen Resmi Pengadaan SupplySync WMS &bull; Dokumen Pembelian Sah Berdasarkan Otorisasi Sistem.
+                </div>
+            </div>
+        </body>
+        </html>
+    `);
+    printWindow.document.close();
+}
+
+/**
+ * Cetak Dokumen Resmi Surat Pesanan Penjualan / Sales Order (SO)
+ */
+function printSalesOrderDocument(so) {
+    if (!so) return;
+    const soNum = so.so_number || `SO-${Date.now()}`;
+    const dateStr = so.order_date ? new Date(so.order_date).toLocaleDateString('id-ID', { dateStyle: 'full' }) : new Date().toLocaleDateString('id-ID', { dateStyle: 'full' });
+    const deliveryStr = so.delivery_date ? new Date(so.delivery_date).toLocaleDateString('id-ID', { dateStyle: 'long' }) : 'Jadwal Segera';
+    const creator = so.created_by_name || 'Staff Sales';
+    const notes = so.notes || 'Pesanan penjualan barang jadi';
+
+    const barcodeSvg = typeof generateBarcodeSvg === 'function' 
+        ? generateBarcodeSvg(soNum, { height: 32, showText: true }) 
+        : `<div style="font-family: monospace; font-weight: bold;">${escDoc(soNum)}</div>`;
+
+    const printWindow = window.open('', '_blank', 'width=850,height=900');
+    if (!printWindow) {
+        alert('Gagal membuka jendela cetak. Izinkan pop-up pada peramban Anda.');
+        return;
+    }
+
+    const items = so.items || [];
+    let grandTotal = 0;
+    const rowsHtml = items.map((item, idx) => {
+        const subtotal = Number(item.requested_quantity || 0) * Number(item.unit_price || 0);
+        grandTotal += subtotal;
+        return `
+            <tr style="border-bottom: 1px solid #cbd5e1;">
+                <td style="padding: 9px; text-align: center;">${idx + 1}</td>
+                <td style="padding: 9px; font-family: monospace; font-weight: bold; color: #1e40af;">${escDoc(item.product_id)}</td>
+                <td style="padding: 9px; font-weight: 600;">${escDoc(item.product_name || item.product_id)}</td>
+                <td style="padding: 9px; text-align: center;">${escDoc(item.unit || 'Unit')}</td>
+                <td style="padding: 9px; text-align: right; font-weight: bold;">${item.requested_quantity}</td>
+                <td style="padding: 9px; text-align: right; font-family: monospace;">Rp ${Number(item.unit_price || 0).toLocaleString('id-ID')}</td>
+                <td style="padding: 9px; text-align: right; font-weight: bold; font-family: monospace;">Rp ${subtotal.toLocaleString('id-ID')}</td>
+            </tr>
+        `;
+    }).join('');
+
+    printWindow.document.write(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Sales Order (SO) - ${escDoc(soNum)}</title>
+            <style>
+                @page { size: A4 portrait; margin: 12mm; }
+                body {
+                    font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
+                    color: #0f172a; margin: 0; padding: 16px; font-size: 12px;
+                }
+                .doc-container { border: 2px solid #059669; padding: 20px; border-radius: 8px; }
+                .header-table { width: 100%; border-bottom: 2px solid #059669; padding-bottom: 12px; margin-bottom: 16px; }
+                .info-box { background: #ecfdf5; border: 1px solid #a7f3d0; padding: 10px; border-radius: 6px; font-size: 11px; }
+                .items-table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+                .items-table th { background: #059669; color: #ffffff; padding: 9px; text-align: left; font-size: 11px; text-transform: uppercase; }
+                .sig-box { width: 33.33%; text-align: center; padding: 15px 10px 5px; }
+                .sig-line { border-bottom: 1px solid #0f172a; width: 75%; margin: 55px auto 4px auto; }
+            </style>
+        </head>
+        <body onload="window.print()">
+            <div class="doc-container">
+                <table class="header-table">
+                    <tr>
+                        <td style="vertical-align: top;">
+                            <div style="font-size: 20px; font-weight: 800; color: #059669; letter-spacing: -0.5px;">SUPPLYNC WMS</div>
+                            <div style="font-size: 10px; color: #64748b; font-weight: 600; text-transform: uppercase;">Enterprise Warehouse & Order Fulfillment</div>
+                            <div style="font-size: 14px; font-weight: 700; color: #0f172a; margin-top: 6px;">SURAT PESANAN PENJUALAN (SALES ORDER)</div>
+                            <div style="display: inline-block; margin-top: 4px; padding: 2px 8px; background: #d1fae5; color: #065f46; border-radius: 4px; font-weight: bold; font-size: 10px;">
+                                STATUS: ${escDoc(so.status || 'DRAFT')}
+                            </div>
+                        </td>
+                        <td style="text-align: right; vertical-align: top;">
+                            <div style="display: inline-block; text-align: right;">
+                                ${barcodeSvg}
+                                <div style="font-size: 10px; color: #64748b; margin-top: 4px;">Tanggal Pesan: <b>${dateStr}</b></div>
+                                <div style="font-size: 10px; color: #059669; margin-top: 2px;">Target Kirim: <b>${deliveryStr}</b></div>
+                            </div>
+                        </td>
+                    </tr>
+                </table>
+
+                <table style="width: 100%; margin-bottom: 15px;" cellspacing="8">
+                    <tr>
+                        <td style="width: 50%; vertical-align: top;" class="info-box">
+                            <div style="font-weight: bold; color: #047857; text-transform: uppercase; font-size: 10px; margin-bottom: 4px;">Pemesan (Pelanggan):</div>
+                            <div style="font-size: 13px; font-weight: 800; color: #0f172a;">${escDoc(so.customer_name)}</div>
+                            <div>Telepon: ${escDoc(so.customer_phone || '-')}</div>
+                            <div>Alamat Kirim: ${escDoc(so.customer_address || '-')}</div>
+                        </td>
+                        <td style="width: 50%; vertical-align: top;" class="info-box">
+                            <div style="font-weight: bold; color: #047857; text-transform: uppercase; font-size: 10px; margin-bottom: 4px;">Fasilitas Gudang Pengirim:</div>
+                            <div style="font-size: 13px; font-weight: 800; color: #0f172a;">${escDoc(so.facility_name || 'Gudang Pusat Cakung')} (${escDoc(so.facility_code || 'WH-JKT-01')})</div>
+                            <div>Kota: ${escDoc(so.city || 'Jakarta')}</div>
+                            <div>Instruksi: ${escDoc(notes)}</div>
+                        </td>
+                    </tr>
+                </table>
+
+                <table class="items-table">
+                    <thead>
+                        <tr>
+                            <th style="text-align: center; width: 35px;">No</th>
+                            <th style="width: 120px;">SKU Produk</th>
+                            <th>Deskripsi Produk</th>
+                            <th style="text-align: center; width: 60px;">Satuan</th>
+                            <th style="text-align: right; width: 70px;">Jumlah</th>
+                            <th style="text-align: right; width: 110px;">Harga Satuan</th>
+                            <th style="text-align: right; width: 120px;">Total (Rp)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${rowsHtml}
+                        <tr style="background: #f8fafc; font-weight: bold; font-size: 13px; border-top: 2px solid #059669;">
+                            <td colspan="6" style="padding: 10px; text-align: right; text-transform: uppercase;">Total Nilai Pesanan:</td>
+                            <td style="padding: 10px; text-align: right; color: #059669; font-family: monospace;">Rp ${(so.total_amount || grandTotal).toLocaleString('id-ID')}</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <table style="width: 100%; margin-top: 40px; border-collapse: collapse;">
+                    <tr>
+                        <td class="sig-box">
+                            <div style="font-weight: bold;">Dibuat Oleh (Admin Sales)</div>
+                            <div class="sig-line"></div>
+                            <div style="font-size: 10px; color: #64748b;">${escDoc(creator)}</div>
+                        </td>
+                        <td class="sig-box">
+                            <div style="font-weight: bold;">Pelanggan / Penerima</div>
+                            <div class="sig-line"></div>
+                            <div style="font-size: 10px; color: #64748b;">(Tanda Tangan & Cap)</div>
+                        </td>
+                        <td class="sig-box">
+                            <div style="font-weight: bold;">Petugas Ekspedisi Gudang</div>
+                            <div class="sig-line"></div>
+                            <div style="font-size: 10px; color: #64748b;">(Serah Terima Armada)</div>
+                        </td>
+                    </tr>
+                </table>
+
+                <div style="margin-top: 25px; text-align: center; font-size: 9px; color: #94a3b8; border-top: 1px solid #e2e8f0; padding-top: 6px;">
+                    Dokumen Resmi Penjualan SupplySync WMS &bull; Surat Pesanan Penjualan Terverifikasi Alokasi FEFO.
+                </div>
+            </div>
+        </body>
+        </html>
+    `);
+    printWindow.document.close();
+}
+
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = {
         printGoodsReceiptNote,
         printDeliveryOrder,
         printStockLedger,
         printTransferDocument,
+        printPurchaseOrderDocument,
+        printSalesOrderDocument,
         escDoc
     };
 }
