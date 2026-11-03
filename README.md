@@ -7,7 +7,7 @@
 ![MySQL](https://img.shields.io/badge/MySQL-v8.0%20InnoDB-blue?style=for-the-badge&logo=mysql)
 ![TailwindCSS](https://img.shields.io/badge/TailwindCSS-v3-38B2AC?style=for-the-badge&logo=tailwind-css)
 ![Chart.js](https://img.shields.io/badge/Chart.js-v4-FF6384?style=for-the-badge&logo=chart.js)
-![Testing](https://img.shields.io/badge/Tests-78%20Passed-success?style=for-the-badge)
+![Testing](https://img.shields.io/badge/Tests-129%20Passed-success?style=for-the-badge)
 ![License](https://img.shields.io/badge/License-MIT-yellow?style=for-the-badge)
 
 ---
@@ -28,6 +28,7 @@ Di industri pergudangan modern, rantai dingin (*cold chain*), dan agribisnis ter
 
 | Fitur Utama | Fungsi & Deskripsi Teknis | Nilai Bisnis / Dampak |
 |---|---|---|
+| **Otomatisasi Restock, Reorder PO & Batch Aging Analytics** | Sistem cerdas penghitungan defisit inventaris berbasis Min-Max Policy & Lead Time pemasok, pencegahan pemesanan dobel (*On-Order Pipeline*), prediksi kehabisan stok (*Days to Stockout*), pemicu 1-klik Draft Purchase Order (tunggal & bulk terkonsolidasi per vendor), serta evaluasi umur simpan batch (*Aging Tiers*: `EXPIRED`, `CRITICAL`, `WARNING`, `HEALTHY`) dengan valuasi potensi risiko kerugian aset (IDR). | Mengotomatisasi siklus pengadaan persediaan (*procurement replenishment*), mengeliminasi risiko *stockout*, serta meminimalkan barang kadaluwarsa melalui *proactive shelf-life monitoring*. |
 | **Purchase & Sales Order Lifecycle (PO & SO)** | Manajemen terintegrasi pengadaan barang dari vendor (*Purchase Order*) dan pesanan penjualan ke pelanggan (*Sales Order*). Terhubung langsung dengan Inbound GRN (otomatis buat batch & lokasi rak) serta Outbound DO (otomatis alokasi potong stok FEFO). Dilengkapi cetak dokumen PO & SO resmi A4. | Menyambungkan tata kelola pergudangan fisik dengan alur bisnis komersial & *supply chain fulfillment*. |
 | **Penguatan RBAC & Scoping Fasilitas** | Penegakan kontrol akses role ketat (`ADMIN`, `MANAGER`, `STAFF`) langsung pada layer backend/API dengan token JWT scrypt dan pembatasan operasional staf gudang (*facility scoping*) berbasis fasilitas cabang yang ditugaskan. | Menjamin kepatuhan integritas data, mencegah eskalasi wewenang, dan mengisolasi operasional staf per cabang. |
 | **Auto-FEFO Outflow Engine** | Mengurangi stok otomatis dari batch dengan tanggal kedaluwarsa paling dekat menggunakan transaksi atomik MySQL dan penguncian baris (`FOR UPDATE`). Mendukung tiebreaker penerimaan (*received_date*) dan perlindungan terhadap batch kedaluwarsa. | Mencegah kerugian barang busuk/kedaluwarsa di gudang (*zero expired waste*). |
@@ -300,7 +301,7 @@ npm test
 Hasil eksekusi:
 ```text
 ✔ Warehouse KPI & Inventory Valuation Analytics Tests (3 pass)
-✔ Express In-Memory Routing & Security Tests (Zero Network Sockets) (6 pass)
+✔ Express In-Memory Routing & Security Tests (Zero Network Sockets) (8 pass)
 ✔ Auth Middleware & RBAC Tests (8 pass)
 ✔ Database Integrity Verification & Backup Utilities Tests (7 pass)
 ✔ Code 39 SVG Barcode & Thermal Label Generator Tests (5 pass)
@@ -310,12 +311,13 @@ Hasil eksekusi:
 ✔ Warehouse Bin Location & Picking Route Allocation Tests (2 pass)
 ✔ Enterprise RBAC & Facility Scoping Verification Tests (12 pass)
 ✔ Phase 18: Purchase Orders (PO) & Sales Orders (SO) Quality Gate Tests (15 pass)
+✔ Intelligent Replenishment & Batch Aging Analytics Tests (Phase 19) (17 pass)
 ✔ WMS Reference Number Generator Tests (4 pass)
 ✔ Security Utilities: Password Hashing & JWT (5 pass)
 ✔ WMS Stock Card Ledger & Running Balance Tests (4 pass)
 ✔ Phase 17: Inter-Warehouse Transfer & Multi-Facility Quality Gate Tests (10 pass)
 ✔ Middleware Input Validator Tests (12 pass)
-ℹ tests 110 | suites 21 | pass 110 | fail 0
+ℹ tests 129 | suites 27 | pass 129 | fail 0
 ```
 
 ---
@@ -341,6 +343,10 @@ Hasil eksekusi:
 | `POST` | `/api/transfers` | Inisiasi pengiriman transfer stok antar-gudang (*In-Transit status*) | `ADMIN` / `MANAGER` |
 | `POST` | `/api/transfers/:id/receive` | Konfirmasi penerimaan barang di gudang tujuan (support penerimaan sebagian) | `ADMIN` / `MANAGER` |
 | `POST` | `/api/transfers/:id/cancel` | Batalkan pengiriman transfer & kembalikan stok ke batch asal secara atomik | `ADMIN` / `MANAGER` |
+| `GET` | `/api/replenishment/alerts` | Ambil daftar peringatan stok rendah, on-order PO, defisit, rekomendasi reorder, & estimasi habis | Authenticated |
+| `POST` | `/api/replenishment/reorder/:productId` | Pemicu 1-klik pembuatan Draft PO untuk satu produk tertentu | `ADMIN` / `MANAGER` |
+| `POST` | `/api/replenishment/reorder-bulk` | Pembangkitan massal Draft PO terkonsolidasi per pemasok | `ADMIN` / `MANAGER` |
+| `GET` | `/api/replenishment/batch-aging` | Analisis penuaan umur simpan batch, klasifikasi tier (`EXPIRED`, `CRITICAL`), & valuasi kerugian | Authenticated |
 | `GET` | `/api/orders/purchase` | Ambil daftar pesanan pembelian (*Purchase Orders*) | Authenticated |
 | `GET` | `/api/orders/purchase/:id` | Ambil rincian lengkap PO berserta item produk & progress penerimaan | Authenticated |
 | `POST` | `/api/orders/purchase` | Buat Purchase Order baru ke pemasok (Status: `DRAFT`) | `ADMIN` / `MANAGER` |

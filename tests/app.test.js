@@ -162,4 +162,39 @@ describe('Express In-Memory Routing & Security Tests (Zero Network Sockets)', ()
 
         app.handle(req, res);
     });
+
+    test('7. Endpoint GET /api/replenishment/alerts menolak permintaan tanpa Bearer token (401 Unauthorized)', (t, done) => {
+        const { req, res, getStatusCode, getBody } = createMockRequestResponse({
+            method: 'GET',
+            url: '/api/replenishment/alerts'
+        });
+
+        res.on('finish', () => {
+            assert.strictEqual(getStatusCode(), 401);
+            const body = getBody();
+            assert.strictEqual(body.status, 'Error');
+            assert.match(body.message, /token/i);
+            done();
+        });
+
+        app.handle(req, res);
+    });
+
+    test('8. Endpoint POST /api/replenishment/reorder/:productId menolak permintaan tanpa Bearer token (401 Unauthorized)', (t, done) => {
+        const { req, res, getStatusCode, getBody } = createMockRequestResponse({
+            method: 'POST',
+            url: '/api/replenishment/reorder/PRD-FEED-01',
+            body: { quantity: 20 }
+        });
+
+        res.on('finish', () => {
+            assert.strictEqual(getStatusCode(), 401);
+            const body = getBody();
+            assert.strictEqual(body.status, 'Error');
+            assert.match(body.message, /token/i);
+            done();
+        });
+
+        app.handle(req, res);
+    });
 });

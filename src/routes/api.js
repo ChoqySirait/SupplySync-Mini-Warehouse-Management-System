@@ -13,6 +13,7 @@ const systemController = require('../controllers/systemController');
 const facilityController = require('../controllers/facilityController');
 const transferController = require('../controllers/transferController');
 const orderController = require('../controllers/orderController');
+const replenishmentController = require('../controllers/replenishmentController');
 
 const validator = require('../middlewares/validator');
 const { authenticateToken, optionalAuth, authorizeRole, requireFacilityScope } = require('../middlewares/authMiddleware');
@@ -93,5 +94,11 @@ router.post('/orders/sales', authenticateToken, authorizeRole('ADMIN', 'MANAGER'
 router.post('/orders/sales/:id/confirm', authenticateToken, authorizeRole('ADMIN', 'MANAGER'), orderController.confirmSalesOrder);
 router.post('/orders/sales/:id/dispatch', authenticateToken, authorizeRole('ADMIN', 'MANAGER', 'STAFF'), orderController.dispatchSalesOrder);
 router.post('/orders/sales/:id/cancel', authenticateToken, authorizeRole('ADMIN', 'MANAGER'), orderController.cancelSalesOrder);
+
+// 14. Routes Otomatisasi Restock, Reorder PO & Analisis Batch Aging (Phase 19)
+router.get('/replenishment/alerts', authenticateToken, replenishmentController.getReplenishmentAlerts);
+router.post('/replenishment/reorder/:productId', authenticateToken, authorizeRole('ADMIN', 'MANAGER'), replenishmentController.generateReorderPo);
+router.post('/replenishment/reorder-bulk', authenticateToken, authorizeRole('ADMIN', 'MANAGER'), replenishmentController.generateBulkReorderPos);
+router.get('/replenishment/batch-aging', authenticateToken, replenishmentController.getBatchAgingReport);
 
 module.exports = router;

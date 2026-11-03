@@ -13,6 +13,8 @@ let currentLocations = [];
 let currentUsers = [];
 let currentPurchaseOrders = [];
 let currentSalesOrders = [];
+let currentReplenishmentAlerts = [];
+let currentBatchAgingData = null;
 let selectedPoDetail = null;
 let selectedSoDetail = null;
 let chartInstance = null;
@@ -95,6 +97,7 @@ function switchTab(tabName) {
         movements: 'Pusat Transaksi & Mutasi Stok (FEFO)',
         transfers: 'Transfer Antar-Gudang & Relokasi Multi-Fasilitas',
         orders: 'Manajemen Pesanan Terintegrasi (Purchase & Sales Orders)',
+        replenishment: 'Otomatisasi Restock & Analitik Aging Batch',
         opname: 'Rekonsiliasi Stock Opname Fisik',
         locations: 'Peta Lokasi Rak & Bin Gudang',
         audit: 'Audit Trail Transaksi Real-time'
@@ -106,6 +109,8 @@ function switchTab(tabName) {
     } else if (tabName === 'orders') {
         loadPurchaseOrdersList();
         loadSalesOrdersList();
+    } else if (tabName === 'replenishment') {
+        loadReplenishmentData();
     }
 
     closeMobileSidebar();
@@ -304,7 +309,8 @@ async function loadDashboardData() {
             loadFacilities(),
             loadTransfersList(),
             loadPurchaseOrdersList(),
-            loadSalesOrdersList()
+            loadSalesOrdersList(),
+            loadReplenishmentData()
         ]);
     } catch (error) {
         console.error('❌ Gagal sinkronisasi data dashboard:', error);
@@ -3087,6 +3093,457 @@ async function cancelSalesOrder(soId, soNumber) {
             loadSalesOrdersList();
         } else {
             showToast(json.message || 'Gagal membatalkan SO.', 'error');
+        }
+    } catch (err) {
+        showToast('Kesalahan: ' + err.message, 'error');
+    }
+}
+
+// ====================================================================
+// 21. REPLENISHMENT AUTOMATION & BATCH AGING ANALYTICS (PHASE 19)
+// ====================================================================
+
+function switchReplenishmentSubtab(subtab) {
+    const reorderBtn = document.getElementById('rep-subtab-reorder-btn');
+    const agingBtn = document.getElementById('rep-subtab-aging-btn');
+    const reorderContent = document.getElementById('rep-subtab-reorder');
+    const agingContent = document.getElementById('rep-subtab-aging');
+
+    if (subtab === 'reorder') {
+        if (reorderBtn) reorderBtn.className = 'px-4 py-2.5 text-xs font-bold border-b-2 border-amber-600 text-amber-700 transition';
+        if (agingBtn) agingBtn.className = 'px-4 py-2.5 text-xs font-bold border-b-2 border-transparent text-slate-500 hover:text-slate-800 transition';
+        if (reorderContent) reorderContent.classList.remove('hidden');
+        if (agingContent) agingContent.classList.add('hidden');
+    } else {
+        if (reorderBtn) reorderBtn.className = 'px-4 py-2.5 text-xs font-bold border-b-2 border-transparent text-slate-500 hover:text-slate-800 transition';
+        if (agingBtn) agingBtn.className = 'px-4 py-2.5 text-xs font-bold border-b-2 border-amber-600 text-amber-700 transition';
+        if (reorderContent) reorderContent.classList.add('hidden');
+        if (agingContent) agingContent.classList.remove('hidden');
+    }
+}
+
+async function loadReplenishmentData() {
+    const facilitySelect = document.getElementById('rep-filter-facility');
+    const facilityId = facilitySelect ? facilitySelect.value : '';
+
+    if (facilitySelect && facilitySelect.options.length <= 1 && currentFacilities && currentFacilities.length > 0) {
+        currentFacilities.forEach(f => {
+            const opt = document.createElement('option');
+            opt.value = f.facility_id;
+            opt.textContent = `${f.facility_code} - ${f.facility_name}`;
+            facilitySelect.appendChild(opt);
+        });
+    }
+
+    const token = authToken || localStorage.getItem('supplysync_token') || '';
+    const headers = { 'Authorization': `Bearer ${token}` };
+
+    const alertsUrl = facilityId ? `/api/replenishment/alerts?facility_id=${encodeURIComponent(facilityId)}` : '/api/replenishment/alerts';
+    const agingUrl = facilityId ? `/api/replenishment/batch-aging?facility_id=${encodeURIComponent(facilityId)}` : '/api/replenishment/batch-aging';
+
+    try {
+        const [alertsRes, agingRes] = await Promise.all([
+            fetch(alertsUrl, { headers }).then(r => r.json()).catch(() => ({ status: 'Error', data: null })),
+            fetch(agingUrl, { headers }).then(r => r.json()).catch(() => ({ status: 'Error', data: null }))
+        ]);
+
+        if (alertsRes && alertsRes.status === 'Success' && alertsRes.data) {
+            currentReplenishmentAlerts = alertsRes.data.alerts || [];
+            const summary = alertsRes.data.summary || {};
+
+            const ovwReorder = document.getElementById('ovw-stat-reorder-count');
+            const ovwPipeline = document.getElementById('ovw-stat-pipeline-count');
+            if (ovwReorder) ovwReorder.innerText = `${summary.total_low_stock || 0} SKU`;
+            if (ovwPipeline) ovwPipeline.innerText = `${summary.total_po_in_pipeline || 0} SKU`;
+
+            const kpiReorder = document.getElementById('rep-kpi-reorder-count');
+            const kpiReorderSub = document.getElementById('rep-kpi-reorder-sub');
+            const kpiPipeline = document.getElementById('rep-kpi-pipeline-count');
+            const budgetPill = document.getElementById('rep-table-budget-pill');
+
+            if (kpiReorder) kpiReorder.innerText = `${summary.total_low_stock || 0} SKU`;
+            if (kpiReorderSub) kpiReorderSub.innerText = `${summary.total_critical_stockout || 0} berisiko habis sebelum tiba`;
+            if (kpiPipeline) kpiPipeline.innerText = `${summary.total_po_in_pipeline || 0} SKU`;
+            if (budgetPill) budgetPill.innerText = `Estimasi Anggaran: ${summary.formatted_reorder_budget || 'Rp 0'}`;
+
+            const badge = document.getElementById('badge-replenishment-alert');
+            if (badge) {
+                if ((summary.total_low_stock || 0) > 0) {
+                    badge.innerText = summary.total_low_stock;
+                    badge.classList.remove('hidden');
+                } else {
+                    badge.classList.add('hidden');
+                }
+            }
+
+            renderReplenishmentAlertsTable(currentReplenishmentAlerts);
+        }
+
+        if (agingRes && agingRes.status === 'Success' && agingRes.data) {
+            currentBatchAgingData = agingRes.data;
+            const agingSum = agingRes.data.summary || {};
+
+            const ovwCritical = document.getElementById('ovw-stat-critical-count');
+            const ovwRiskVal = document.getElementById('ovw-stat-risk-val');
+            const totalCriticalBatches = (agingRes.data.tiers?.EXPIRED?.count || 0) + (agingRes.data.tiers?.CRITICAL?.count || 0);
+
+            if (ovwCritical) ovwCritical.innerText = `${totalCriticalBatches} Batch`;
+            if (ovwRiskVal) ovwRiskVal.innerText = agingSum.formatted_risk_value || 'Rp 0';
+
+            const kpiCritical = document.getElementById('rep-kpi-critical-count');
+            const kpiRiskValue = document.getElementById('rep-kpi-risk-value');
+            if (kpiCritical) kpiCritical.innerText = `${totalCriticalBatches} Batch`;
+            if (kpiRiskValue) kpiRiskValue.innerText = agingSum.formatted_risk_value || 'Rp 0';
+
+            renderBatchAgingView(currentBatchAgingData);
+        }
+    } catch (err) {
+        console.warn('Gagal memuat data replenishment & aging:', err.message);
+    }
+}
+
+function renderReplenishmentAlertsTable(alerts) {
+    const tbody = document.getElementById('rep-reorder-tbody');
+    if (!tbody) return;
+    tbody.innerHTML = '';
+
+    if (!alerts || alerts.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="10" class="p-8 text-center text-slate-400">Seluruh stok inventaris berada pada tingkat aman (&gt; min_stock).</td></tr>`;
+        return;
+    }
+
+    alerts.forEach(item => {
+        const tr = document.createElement('tr');
+        tr.className = 'hover:bg-slate-50 transition border-b border-slate-100';
+
+        let statusBadge = '';
+        if (item.reorder_status === 'OUT_OF_STOCK') {
+            statusBadge = `<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-100 text-rose-800 border border-rose-300">Habis Total</span>`;
+        } else if (item.reorder_status === 'REORDER_REQUIRED') {
+            statusBadge = `<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300">Perlu Reorder</span>`;
+        } else if (item.reorder_status === 'PO_IN_PIPELINE') {
+            statusBadge = `<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-100 text-blue-800 border border-blue-300">PO On-Order</span>`;
+        } else {
+            statusBadge = `<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">Aman</span>`;
+        }
+
+        let riskBadge = '';
+        if (item.stockout_risk === 'CRITICAL') {
+            riskBadge = `<span class="text-rose-600 font-bold block text-[10px]">&bull; Kritis (${item.days_to_stockout} hari lagi)</span>`;
+        } else if (item.stockout_risk === 'HIGH') {
+            riskBadge = `<span class="text-amber-600 font-bold block text-[10px]">&bull; Waspada (${item.days_to_stockout} hari lagi)</span>`;
+        } else if (item.days_to_stockout !== null) {
+            riskBadge = `<span class="text-slate-500 block text-[10px]">&bull; ${item.days_to_stockout} hari lagi</span>`;
+        } else {
+            riskBadge = `<span class="text-slate-400 block text-[10px]">&bull; Stabil</span>`;
+        }
+
+        const supplierName = item.preferred_supplier ? escapeHtml(item.preferred_supplier.supplier_name) : '-';
+        const leadTime = item.preferred_supplier ? `${item.preferred_supplier.lead_time_days || 7} hari` : '7 hari';
+
+        tr.innerHTML = `
+            <td class="p-3.5 font-mono font-bold text-slate-800">${escapeHtml(item.product_id)}</td>
+            <td class="p-3.5">
+                <span class="font-bold text-slate-900 block">${escapeHtml(item.product_name)}</span>
+                <span class="text-[10px] text-slate-400">${escapeHtml(item.category)} &bull; ${escapeHtml(item.unit)}</span>
+            </td>
+            <td class="p-3.5 text-right font-extrabold ${item.total_stock <= item.min_stock ? 'text-rose-600' : 'text-slate-800'}">${item.total_stock}</td>
+            <td class="p-3.5 text-right text-slate-500 font-semibold">${item.min_stock}</td>
+            <td class="p-3.5 text-right font-bold text-blue-600">${item.on_order_qty > 0 ? `+${item.on_order_qty}` : '0'}</td>
+            <td class="p-3.5 text-right font-black ${item.recommended_reorder_qty > 0 ? 'text-amber-600' : 'text-slate-400'}">
+                ${item.recommended_reorder_qty > 0 ? `${item.recommended_reorder_qty} ${escapeHtml(item.unit)}` : '-'}
+            </td>
+            <td class="p-3.5">
+                <span class="font-semibold text-slate-700 block truncate max-w-[140px]" title="${supplierName}">${supplierName}</span>
+                <span class="text-[10px] text-slate-400">Lead time: ${leadTime}</span>
+            </td>
+            <td class="p-3.5">
+                <span class="text-slate-600 font-medium block">${item.daily_burn_rate > 0 ? `${item.daily_burn_rate} /hari` : '-'}</span>
+                ${riskBadge}
+            </td>
+            <td class="p-3.5 text-center">${statusBadge}</td>
+            <td class="p-3.5 text-right">
+                <button onclick="openConfirmReorderModal('${escapeHtml(item.product_id)}')" class="px-2.5 py-1.5 rounded-lg bg-amber-50 border border-amber-300 hover:bg-amber-100 text-amber-800 font-bold text-[11px] transition shadow-xs flex items-center gap-1 ml-auto">
+                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+                    1-Klik PO
+                </button>
+            </td>
+        `;
+
+        tbody.appendChild(tr);
+    });
+}
+
+function renderBatchAgingView(agingData) {
+    if (!agingData) return;
+
+    const { summary, tiers, top_risk_batches, all_batches } = agingData;
+
+    const freshnessEl = document.getElementById('rep-aging-freshness-score');
+    if (freshnessEl) freshnessEl.innerText = `Skor Kesegaran: ${summary.freshness_score || 100}%`;
+
+    const barExpired = document.getElementById('bar-aging-expired');
+    const barCritical = document.getElementById('bar-aging-critical');
+    const barWarning = document.getElementById('bar-aging-warning');
+    const barHealthy = document.getElementById('bar-aging-healthy');
+
+    if (barExpired) barExpired.style.width = `${tiers.EXPIRED.percentage || 0}%`;
+    if (barCritical) barCritical.style.width = `${tiers.CRITICAL.percentage || 0}%`;
+    if (barWarning) barWarning.style.width = `${tiers.WARNING.percentage || 0}%`;
+    if (barHealthy) barHealthy.style.width = `${tiers.HEALTHY.percentage || 0}%`;
+
+    const pExpired = document.getElementById('pill-aging-expired');
+    const vExpired = document.getElementById('val-aging-expired');
+    const pCritical = document.getElementById('pill-aging-critical');
+    const vCritical = document.getElementById('val-aging-critical');
+    const pWarning = document.getElementById('pill-aging-warning');
+    const vWarning = document.getElementById('val-aging-warning');
+    const pHealthy = document.getElementById('pill-aging-healthy');
+    const vHealthy = document.getElementById('val-aging-healthy');
+
+    if (pExpired) pExpired.innerText = `${tiers.EXPIRED.count} Batch (${tiers.EXPIRED.units} Unit)`;
+    if (vExpired) vExpired.innerText = `Risiko: ${tiers.EXPIRED.formatted_value}`;
+    if (pCritical) pCritical.innerText = `${tiers.CRITICAL.count} Batch (${tiers.CRITICAL.units} Unit)`;
+    if (vCritical) vCritical.innerText = `Risiko: ${tiers.CRITICAL.formatted_value}`;
+    if (pWarning) pWarning.innerText = `${tiers.WARNING.count} Batch (${tiers.WARNING.units} Unit)`;
+    if (vWarning) vWarning.innerText = `Aset: ${tiers.WARNING.formatted_value}`;
+    if (pHealthy) pHealthy.innerText = `${tiers.HEALTHY.count} Batch (${tiers.HEALTHY.units} Unit)`;
+    if (vHealthy) vHealthy.innerText = `Aset: ${tiers.HEALTHY.formatted_value}`;
+
+    const tbody = document.getElementById('rep-aging-tbody');
+    if (!tbody) return;
+    tbody.innerHTML = '';
+
+    const displayBatches = (top_risk_batches && top_risk_batches.length > 0)
+        ? top_risk_batches
+        : (all_batches || []).slice(0, 10);
+
+    if (displayBatches.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="8" class="p-8 text-center text-slate-400">Seluruh batch inventaris dalam kondisi prima (&gt; 90 hari umur simpan).</td></tr>`;
+        return;
+    }
+
+    displayBatches.forEach(b => {
+        const tr = document.createElement('tr');
+        tr.className = 'hover:bg-slate-50 transition border-b border-slate-100';
+
+        let tierBadge = '';
+        let countdownBadge = '';
+        let actionBtn = '';
+
+        if (b.tier === 'EXPIRED') {
+            tierBadge = `<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-100 text-rose-800 border border-rose-300">Kedaluwarsa</span>`;
+            countdownBadge = `<span class="text-rose-600 font-bold block text-[11px]">Lewat ${Math.abs(b.days_until_expiry)} hari</span>`;
+            actionBtn = `
+                <button onclick="openDisposalForBatch('${escapeHtml(b.product_id)}', ${b.quantity})" class="px-2 py-1 bg-rose-50 border border-rose-200 hover:bg-rose-100 text-rose-700 font-bold text-[10px] rounded-lg transition">
+                    Buang Afkir
+                </button>
+            `;
+        } else if (b.tier === 'CRITICAL') {
+            tierBadge = `<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300">Kritis</span>`;
+            countdownBadge = `<span class="text-amber-600 font-bold block text-[11px]">${b.days_until_expiry} hari lagi</span>`;
+            actionBtn = `
+                <button onclick="openStockOutForProduct('${escapeHtml(b.product_id)}', ${b.quantity})" class="px-2 py-1 bg-amber-50 border border-amber-200 hover:bg-amber-100 text-amber-700 font-bold text-[10px] rounded-lg transition">
+                    Keluar FEFO
+                </button>
+            `;
+        } else if (b.tier === 'WARNING') {
+            tierBadge = `<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-yellow-100 text-yellow-800 border border-yellow-300">Waspada</span>`;
+            countdownBadge = `<span class="text-slate-600 font-medium block text-[11px]">${b.days_until_expiry} hari</span>`;
+            actionBtn = `<span class="text-[10px] text-slate-400">Pantau</span>`;
+        } else {
+            tierBadge = `<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">Aman</span>`;
+            countdownBadge = `<span class="text-emerald-700 font-medium block text-[11px]">${b.days_until_expiry} hari</span>`;
+            actionBtn = `<span class="text-[10px] text-emerald-600">Prima</span>`;
+        }
+
+        tr.innerHTML = `
+            <td class="p-3.5 font-mono font-bold text-slate-800">${escapeHtml(b.batch_code)}</td>
+            <td class="p-3.5">
+                <span class="font-bold text-slate-900 block">${escapeHtml(b.product_name)}</span>
+                <span class="text-[10px] text-slate-400 font-mono">${escapeHtml(b.product_id)} &bull; ${escapeHtml(b.category)}</span>
+            </td>
+            <td class="p-3.5">
+                <span class="font-semibold text-slate-700 block">${escapeHtml(b.facility_name)}</span>
+                <span class="text-[10px] text-slate-400 font-mono">Rak: ${escapeHtml(b.location_code)} (${escapeHtml(b.zone_name)})</span>
+            </td>
+            <td class="p-3.5 text-right font-extrabold text-slate-800">${b.quantity} ${escapeHtml(b.unit)}</td>
+            <td class="p-3.5">
+                <span class="text-slate-700 font-semibold block">${b.expired_date ? String(b.expired_date).slice(0, 10) : '-'}</span>
+                ${countdownBadge}
+            </td>
+            <td class="p-3.5 text-right font-bold text-slate-900">${b.formatted_value || 'Rp 0'}</td>
+            <td class="p-3.5 text-center">${tierBadge}</td>
+            <td class="p-3.5 text-right">${actionBtn}</td>
+        `;
+
+        tbody.appendChild(tr);
+    });
+}
+
+function openDisposalForBatch(productId, quantity) {
+    openModal('modal-stock-disposal');
+    const select = document.getElementById('disposal-product-id');
+    const qtyInput = document.getElementById('disposal-quantity');
+    const reasonInput = document.getElementById('disposal-reason');
+
+    if (select) select.value = productId;
+    if (qtyInput) qtyInput.value = quantity;
+    if (reasonInput) reasonInput.value = 'Pembuangan barang kedaluwarsa (Batch Aging Alert)';
+}
+
+function openStockOutForProduct(productId, quantity) {
+    openModal('modal-stock-out');
+    const select = document.getElementById('stock-out-product-id');
+    const qtyInput = document.getElementById('stock-out-quantity');
+    const notesInput = document.getElementById('stock-out-notes');
+
+    if (select) select.value = productId;
+    if (qtyInput) qtyInput.value = Math.min(10, quantity);
+    if (notesInput) notesInput.value = 'Prioritas pengeluaran batch mendekati kedaluwarsa (FEFO)';
+}
+
+function openConfirmReorderModal(productId) {
+    const item = currentReplenishmentAlerts.find(a => a.product_id === productId);
+    if (!item) {
+        showToast('Data produk tidak ditemukan.', 'error');
+        return;
+    }
+
+    document.getElementById('reorder-product-id').value = item.product_id;
+    document.getElementById('reorder-display-prod-name').innerText = item.product_name;
+    document.getElementById('reorder-display-sku').innerText = item.product_id;
+    document.getElementById('reorder-display-unit').innerText = item.unit;
+    document.getElementById('reorder-display-stock').innerText = `${item.total_stock} ${item.unit}`;
+    document.getElementById('reorder-display-min').innerText = `${item.min_stock} ${item.unit}`;
+    document.getElementById('reorder-display-deficit').innerText = `${Math.max(0, item.min_stock - item.total_stock)} ${item.unit}`;
+
+    const supSelect = document.getElementById('reorder-supplier-id');
+    supSelect.innerHTML = '<option value="">Pilih Vendor...</option>';
+    if (currentSuppliers && currentSuppliers.length > 0) {
+        currentSuppliers.forEach(s => {
+            const opt = document.createElement('option');
+            opt.value = s.supplier_id;
+            opt.textContent = `${s.supplier_code} - ${s.supplier_name}`;
+            if (item.preferred_supplier && item.preferred_supplier.supplier_id === s.supplier_id) {
+                opt.selected = true;
+            }
+            supSelect.appendChild(opt);
+        });
+    }
+
+    const facSelect = document.getElementById('reorder-facility-id');
+    facSelect.innerHTML = '<option value="">Pilih Gudang...</option>';
+    if (currentFacilities && currentFacilities.length > 0) {
+        currentFacilities.forEach(f => {
+            const opt = document.createElement('option');
+            opt.value = f.facility_id;
+            opt.textContent = `${f.facility_code} - ${f.facility_name}`;
+            facSelect.appendChild(opt);
+        });
+        facSelect.selectedIndex = 1;
+    }
+
+    const qty = item.recommended_reorder_qty > 0 ? item.recommended_reorder_qty : Math.max(10, item.min_stock);
+    document.getElementById('reorder-quantity-input').value = qty;
+    document.getElementById('reorder-cost-input').value = item.cost_price || 0;
+
+    updateReorderModalTotal();
+    openModal('modal-confirm-reorder-po');
+}
+
+function updateReorderModalTotal() {
+    const qty = parseInt(document.getElementById('reorder-quantity-input')?.value, 10) || 0;
+    const cost = parseFloat(document.getElementById('reorder-cost-input')?.value) || 0;
+    const total = qty * cost;
+    const disp = document.getElementById('reorder-display-total-amount');
+    if (disp) {
+        disp.innerText = new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(total);
+    }
+}
+
+async function handleConfirmReorderPo(event) {
+    event.preventDefault();
+    const productId = document.getElementById('reorder-product-id').value;
+    const supplierId = document.getElementById('reorder-supplier-id').value;
+    const facilityId = document.getElementById('reorder-facility-id').value;
+    const quantity = parseInt(document.getElementById('reorder-quantity-input').value, 10);
+    const cost = parseFloat(document.getElementById('reorder-cost-input').value) || 0;
+
+    if (!supplierId) {
+        showToast('Pilih pemasok terlebih dahulu.', 'warning');
+        return;
+    }
+    if (!facilityId) {
+        showToast('Pilih fasilitas gudang tujuan terlebih dahulu.', 'warning');
+        return;
+    }
+    if (isNaN(quantity) || quantity <= 0) {
+        showToast('Kuantitas pesanan harus bilangan bulat positif.', 'warning');
+        return;
+    }
+
+    const btn = document.getElementById('btn-submit-reorder-po');
+    if (btn) btn.disabled = true;
+
+    try {
+        const res = await fetch(`/api/replenishment/reorder/${encodeURIComponent(productId)}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${authToken || localStorage.getItem('supplysync_token') || ''}`
+            },
+            body: JSON.stringify({
+                supplier_id: supplierId,
+                facility_id: facilityId,
+                quantity: quantity
+            })
+        });
+
+        const json = await res.json();
+        if (json.status === 'Success') {
+            showToast(`Draft Purchase Order #${json.data.po_number} berhasil dibuat!`, 'success');
+            closeModal('modal-confirm-reorder-po');
+            loadReplenishmentData();
+            loadPurchaseOrdersList();
+        } else {
+            showToast(json.message || 'Gagal membuat Draft PO.', 'error');
+        }
+    } catch (err) {
+        showToast('Kesalahan: ' + err.message, 'error');
+    } finally {
+        if (btn) btn.disabled = false;
+    }
+}
+
+async function handleTriggerBulkReorder() {
+    if (currentUser && currentUser.role === 'STAFF') {
+        showToast('Role STAFF tidak memiliki izin memicu pembuatan Purchase Order (Hanya Admin / Manager).', 'error');
+        return;
+    }
+
+    if (!confirm('Apakah Anda yakin ingin membuat Draft Purchase Order terkonsolidasi untuk seluruh produk yang memerlukan restock?')) {
+        return;
+    }
+
+    try {
+        const res = await fetch('/api/replenishment/reorder-bulk', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${authToken || localStorage.getItem('supplysync_token') || ''}`
+            },
+            body: JSON.stringify({ facility_id: 1 })
+        });
+
+        const json = await res.json();
+        if (json.status === 'Success') {
+            showToast(json.message || 'Bulk Reorder PO berhasil diproses!', 'success');
+            loadReplenishmentData();
+            loadPurchaseOrdersList();
+            switchTab('orders');
+        } else {
+            showToast(json.message || 'Gagal memproses bulk reorder.', 'error');
         }
     } catch (err) {
         showToast('Kesalahan: ' + err.message, 'error');

@@ -62,6 +62,14 @@
                     Pesanan PO & SO
                 </button>
 
+                <button onclick="switchTab('replenishment')" id="nav-replenishment" class="nav-link w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl transition text-slate-600 hover:bg-slate-100">
+                    <div class="flex items-center gap-3">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+                        <span>Restock & Aging</span>
+                    </div>
+                    <span id="badge-replenishment-alert" class="hidden px-2 py-0.5 text-[10px] font-bold bg-amber-500 text-white rounded-full">!</span>
+                </button>
+
                 <button onclick="switchTab('opname')" id="nav-opname" class="nav-link w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl transition text-slate-600 hover:bg-slate-100">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/></svg>
                     Stock Opname Fisik
@@ -213,6 +221,51 @@
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
                             Stock Opname
                         </button>
+                    </div>
+                </div>
+
+                <!-- SECTION PERINGATAN CERDAS RESTOCK & BATCH AGING (Phase 19) -->
+                <div class="card-enterprise p-6 rounded-2xl bg-gradient-to-r from-amber-50/60 via-white to-rose-50/40 border border-amber-200/80 shadow-sm space-y-4">
+                    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 rounded-xl bg-amber-500 text-white flex items-center justify-center shadow-sm">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+                            </div>
+                            <div>
+                                <div class="flex items-center gap-2">
+                                    <h3 class="text-sm font-bold text-slate-900">Pusat Peringatan Dini Restock & Mitigasi Kedaluwarsa</h3>
+                                    <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300">Phase 19 Engine</span>
+                                </div>
+                                <p class="text-xs text-slate-500">Deteksi otomatis batas minimum SKU, prediksi kehabisan stok, dan mitigasi risiko kerugian batch.</p>
+                            </div>
+                        </div>
+                        <button onclick="switchTab('replenishment')" class="px-3.5 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm transition">
+                            <span>Buka Manajemen Restock & Aging</span>
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"/></svg>
+                        </button>
+                    </div>
+
+                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-1">
+                        <div class="p-3 bg-white/80 rounded-xl border border-slate-200">
+                            <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Perlu Restock</span>
+                            <p id="ovw-stat-reorder-count" class="text-xl font-black text-rose-600 mt-0.5">0 SKU</p>
+                            <span class="text-[10px] text-slate-500">Stok <= Batas Minimum</span>
+                        </div>
+                        <div class="p-3 bg-white/80 rounded-xl border border-slate-200">
+                            <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400">PO On-Order</span>
+                            <p id="ovw-stat-pipeline-count" class="text-xl font-black text-blue-600 mt-0.5">0 SKU</p>
+                            <span class="text-[10px] text-slate-500">Sedang Dipesan ke Vendor</span>
+                        </div>
+                        <div class="p-3 bg-white/80 rounded-xl border border-slate-200">
+                            <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Batch Kritis & Kadaluwarsa</span>
+                            <p id="ovw-stat-critical-count" class="text-xl font-black text-amber-600 mt-0.5">0 Batch</p>
+                            <span class="text-[10px] text-slate-500"><= 30 Hari Expired</span>
+                        </div>
+                        <div class="p-3 bg-white/80 rounded-xl border border-slate-200">
+                            <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Nilai Risiko Kedaluwarsa</span>
+                            <p id="ovw-stat-risk-val" class="text-base font-black text-slate-900 mt-0.5">Rp 0</p>
+                            <span class="text-[10px] text-rose-500 font-semibold">Potensi Kerugian Aset</span>
+                        </div>
                     </div>
                 </div>
 
@@ -561,7 +614,192 @@
                     </div>
                 </div>
             </div>
-            <div id="tab-opname" class="tab-content hidden space-y-4">
+
+            <!-- TAB: RESTOCK & BATCH AGING (Phase 19) -->
+            <div id="tab-replenishment" class="tab-content hidden space-y-6">
+                <!-- Header -->
+                <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                    <div>
+                        <div class="flex items-center gap-2">
+                            <h3 class="text-base font-bold text-slate-900">Otomatisasi Restock & Analitik Batch Aging</h3>
+                            <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300">Phase 19 Enterprise</span>
+                        </div>
+                        <p class="text-xs text-slate-500">Pemicu Purchase Order 1-klik, estimasi hari kehabisan stok (Days to Stockout), dan evaluasi umur simpan batch.</p>
+                    </div>
+                    <div class="flex flex-wrap items-center gap-2">
+                        <select id="rep-filter-facility" onchange="loadReplenishmentData()" class="bg-white border border-slate-300 text-xs text-slate-800 rounded-xl px-3 py-2 outline-none">
+                            <option value="">Semua Fasilitas Gudang</option>
+                        </select>
+                        <button onclick="handleTriggerBulkReorder()" class="bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold px-3.5 py-2 rounded-xl transition flex items-center gap-1.5 shadow-sm" title="Buat Draft PO Terkonsolidasi untuk Seluruh SKU Kritis">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+                            1-Klik Bulk Reorder PO
+                        </button>
+                        <button onclick="loadReplenishmentData()" class="bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold px-3 py-2 rounded-xl transition flex items-center gap-1.5" title="Refresh Analisis">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                            Refresh
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 4 KPI Metrics -->
+                <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                    <div class="card-enterprise p-4 rounded-xl bg-gradient-to-br from-white to-rose-50/30">
+                        <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Butuh Restock</span>
+                        <h4 id="rep-kpi-reorder-count" class="text-2xl font-black text-rose-600 mt-1">0 SKU</h4>
+                        <span id="rep-kpi-reorder-sub" class="text-xs text-slate-500 mt-0.5 block">0 item di bawah ambang</span>
+                    </div>
+                    <div class="card-enterprise p-4 rounded-xl bg-gradient-to-br from-white to-blue-50/30">
+                        <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400">PO On-Order</span>
+                        <h4 id="rep-kpi-pipeline-count" class="text-2xl font-black text-blue-600 mt-1">0 SKU</h4>
+                        <span class="text-xs text-slate-500 mt-0.5 block">Pesanan aktif di vendor</span>
+                    </div>
+                    <div class="card-enterprise p-4 rounded-xl bg-gradient-to-br from-white to-amber-50/30">
+                        <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Batch Kritis & Kadaluwarsa</span>
+                        <h4 id="rep-kpi-critical-count" class="text-2xl font-black text-amber-600 mt-1">0 Batch</h4>
+                        <span class="text-xs text-slate-500 mt-0.5 block">&le; 30 Hari menuju expired</span>
+                    </div>
+                    <div class="card-enterprise p-4 rounded-xl bg-gradient-to-br from-white to-purple-50/30">
+                        <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Nilai Risiko Kedaluwarsa</span>
+                        <h4 id="rep-kpi-risk-value" class="text-lg font-black text-slate-900 mt-1">Rp 0</h4>
+                        <span class="text-xs text-rose-500 font-semibold mt-0.5 block">Potensi kerugian aset fisik</span>
+                    </div>
+                </div>
+
+                <!-- Sub-Tabs Switcher: Restock vs Batch Aging -->
+                <div class="flex items-center gap-2 border-b border-slate-200">
+                    <button id="rep-subtab-reorder-btn" onclick="switchReplenishmentSubtab('reorder')" class="px-4 py-2.5 text-xs font-bold border-b-2 border-amber-600 text-amber-700 transition">
+                        Peringatan Restock & Rekomendasi PO
+                    </button>
+                    <button id="rep-subtab-aging-btn" onclick="switchReplenishmentSubtab('aging')" class="px-4 py-2.5 text-xs font-bold border-b-2 border-transparent text-slate-500 hover:text-slate-800 transition">
+                        Analisis Umur Simpan & Penuaan Batch
+                    </button>
+                </div>
+
+                <!-- SUBTAB 1: REORDER ALERTS TABLE -->
+                <div id="rep-subtab-reorder" class="space-y-4">
+                    <div class="card-enterprise rounded-2xl overflow-hidden">
+                        <div class="p-4 bg-slate-50 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                            <div>
+                                <h4 class="text-xs font-bold text-slate-800">Daftar Peringatan Ambang Batas SKU & Rekomendasi Reorder</h4>
+                                <p class="text-[11px] text-slate-500">Dihitung otomatis berbasis Min-Max Inventory & laju konsumsi harian (Burn Rate).</p>
+                            </div>
+                            <span id="rep-table-budget-pill" class="text-xs font-bold text-slate-700 bg-white px-3 py-1.5 rounded-xl border border-slate-200 shadow-sm">
+                                Estimasi Anggaran: Rp 0
+                            </span>
+                        </div>
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left text-xs">
+                                <thead class="bg-slate-100/80 text-slate-600 font-semibold uppercase text-[10px] tracking-wider border-b border-slate-200">
+                                    <tr>
+                                        <th class="p-3.5">SKU / ID Produk</th>
+                                        <th class="p-3.5">Nama Produk & Kategori</th>
+                                        <th class="p-3.5 text-right">Stok Fisik</th>
+                                        <th class="p-3.5 text-right">Min Stock</th>
+                                        <th class="p-3.5 text-right">On-Order (PO)</th>
+                                        <th class="p-3.5 text-right">Rekomendasi PO</th>
+                                        <th class="p-3.5">Pemasok & Lead Time</th>
+                                        <th class="p-3.5">Burn Rate & Prediksi Habis</th>
+                                        <th class="p-3.5 text-center">Status Restock</th>
+                                        <th class="p-3.5 text-right">Aksi</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="rep-reorder-tbody" class="divide-y divide-slate-100 text-slate-700">
+                                    <tr><td colspan="10" class="p-8 text-center text-slate-400">Memuat analisis peringatan restock...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- SUBTAB 2: BATCH AGING ANALYTICS -->
+                <div id="rep-subtab-aging" class="hidden space-y-4">
+                    <!-- Visual Distribution Bar -->
+                    <div class="card-enterprise p-5 rounded-2xl space-y-3">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <h4 class="text-xs font-bold text-slate-800">Distribusi Umur Simpan Batch Inventaris</h4>
+                                <p class="text-[11px] text-slate-500">Proporsi kesegaran stok berdasarkan sisa hari sebelum tanggal kedaluwarsa.</p>
+                            </div>
+                            <span id="rep-aging-freshness-score" class="text-xs font-bold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200">
+                                Skor Kesegaran: 100%
+                            </span>
+                        </div>
+
+                        <!-- Progress Bar Multi-Segment -->
+                        <div class="w-full h-4 bg-slate-100 rounded-full overflow-hidden flex shadow-inner">
+                            <div id="bar-aging-expired" class="bg-rose-600 h-full transition-all duration-500" style="width: 0%;" title="Kedaluwarsa"></div>
+                            <div id="bar-aging-critical" class="bg-amber-500 h-full transition-all duration-500" style="width: 0%;" title="Kritis (1-30 Hari)"></div>
+                            <div id="bar-aging-warning" class="bg-yellow-400 h-full transition-all duration-500" style="width: 0%;" title="Waspada (31-90 Hari)"></div>
+                            <div id="bar-aging-healthy" class="bg-emerald-500 h-full transition-all duration-500" style="width: 100%;" title="Aman (>90 Hari)"></div>
+                        </div>
+
+                        <!-- Legend & Pills -->
+                        <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2 text-xs">
+                            <div class="p-2.5 rounded-xl border border-rose-200 bg-rose-50/40">
+                                <span class="flex items-center gap-1.5 font-bold text-rose-700">
+                                    <span class="w-2.5 h-2.5 rounded-full bg-rose-600"></span>
+                                    Kedaluwarsa (&le; 0 Hari)
+                                </span>
+                                <p id="pill-aging-expired" class="font-bold text-slate-800 mt-1">0 Batch (0 Unit)</p>
+                                <span id="val-aging-expired" class="text-[10px] text-rose-600 block">Rp 0</span>
+                            </div>
+                            <div class="p-2.5 rounded-xl border border-amber-200 bg-amber-50/40">
+                                <span class="flex items-center gap-1.5 font-bold text-amber-700">
+                                    <span class="w-2.5 h-2.5 rounded-full bg-amber-500"></span>
+                                    Kritis (1 - 30 Hari)
+                                </span>
+                                <p id="pill-aging-critical" class="font-bold text-slate-800 mt-1">0 Batch (0 Unit)</p>
+                                <span id="val-aging-critical" class="text-[10px] text-amber-600 block">Rp 0</span>
+                            </div>
+                            <div class="p-2.5 rounded-xl border border-yellow-200 bg-yellow-50/40">
+                                <span class="flex items-center gap-1.5 font-bold text-yellow-700">
+                                    <span class="w-2.5 h-2.5 rounded-full bg-yellow-400"></span>
+                                    Waspada (31 - 90 Hari)
+                                </span>
+                                <p id="pill-aging-warning" class="font-bold text-slate-800 mt-1">0 Batch (0 Unit)</p>
+                                <span id="val-aging-warning" class="text-[10px] text-slate-500 block">Rp 0</span>
+                            </div>
+                            <div class="p-2.5 rounded-xl border border-emerald-200 bg-emerald-50/40">
+                                <span class="flex items-center gap-1.5 font-bold text-emerald-700">
+                                    <span class="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
+                                    Aman (> 90 Hari)
+                                </span>
+                                <p id="pill-aging-healthy" class="font-bold text-slate-800 mt-1">0 Batch (0 Unit)</p>
+                                <span id="val-aging-healthy" class="text-[10px] text-slate-500 block">Rp 0</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Top At-Risk Batches Table -->
+                    <div class="card-enterprise rounded-2xl overflow-hidden">
+                        <div class="p-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+                            <div>
+                                <h4 class="text-xs font-bold text-slate-800">Daftar Batch Berisiko Tinggi (Kedaluwarsa & Kritis)</h4>
+                                <p class="text-[11px] text-slate-500">Batch yang membutuhkan tindakan segera: alokasi pengeluaran prioritas FEFO atau pembuangan afkir.</p>
+                            </div>
+                        </div>
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left text-xs">
+                                <thead class="bg-slate-100/80 text-slate-600 font-semibold uppercase text-[10px] tracking-wider border-b border-slate-200">
+                                    <tr>
+                                        <th class="p-3.5">Kode Batch</th>
+                                        <th class="p-3.5">SKU & Nama Produk</th>
+                                        <th class="p-3.5">Gudang & Lokasi Rak</th>
+                                        <th class="p-3.5 text-right">Kuantitas</th>
+                                        <th class="p-3.5">Tanggal Expired & Sisa Hari</th>
+                                        <th class="p-3.5 text-right">Nilai Risiko (HPP)</th>
+                                        <th class="p-3.5 text-center">Status Umur</th>
+                                        <th class="p-3.5 text-right">Rekomendasi Tindakan</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="rep-aging-tbody" class="divide-y divide-slate-100 text-slate-700">
+                                    <tr><td colspan="8" class="p-8 text-center text-slate-400">Memuat data analitik batch aging...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
                 <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                     <div>
                         <h3 class="text-base font-bold text-slate-900">Rekonsiliasi Stock Opname Fisik</h3>
@@ -1878,6 +2116,72 @@
                 </button>
                 <button type="button" onclick="closeModal('modal-so-detail')" class="px-4 py-2 rounded-xl bg-slate-100 text-slate-700 font-medium hover:bg-slate-200 text-xs">Tutup</button>
             </div>
+        </div>
+    </div>
+
+    <!-- Modal: Konfirmasi 1-Klik Pembangkitan Draft PO dari Replenishment Trigger -->
+    <div id="modal-confirm-reorder-po" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-lg w-full p-6 relative flex flex-col">
+            <div class="flex items-center justify-between pb-3 border-b border-slate-100 mb-3">
+                <div>
+                    <span class="text-[10px] font-bold uppercase tracking-wider text-amber-700 bg-amber-50 px-2.5 py-0.5 rounded border border-amber-200">Pemicu Cerdas Replenishment</span>
+                    <h3 class="text-base font-bold text-slate-900 mt-1">Buat Draft Purchase Order (PO)</h3>
+                </div>
+                <button onclick="closeModal('modal-confirm-reorder-po')" class="text-slate-400 hover:text-slate-700 text-xl font-bold">&times;</button>
+            </div>
+
+            <form id="form-confirm-reorder-po" onsubmit="handleConfirmReorderPo(event)" class="space-y-3.5 text-xs">
+                <input type="hidden" id="reorder-product-id">
+
+                <div class="p-3 bg-amber-50/60 border border-amber-200 rounded-xl space-y-1">
+                    <p class="font-bold text-slate-800 text-sm" id="reorder-display-prod-name">-</p>
+                    <p class="text-slate-600">SKU: <span id="reorder-display-sku" class="font-mono font-bold text-slate-700">-</span> | Satuan: <span id="reorder-display-unit">-</span></p>
+                    <div class="flex items-center gap-3 pt-1 text-[11px]">
+                        <span>Stok Saat Ini: <b id="reorder-display-stock" class="text-rose-600 font-bold">0</b></span>
+                        <span>Batas Min: <b id="reorder-display-min">0</b></span>
+                        <span>Defisit: <b id="reorder-display-deficit" class="text-amber-700 font-bold">0</b></span>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                        <label class="block font-semibold text-slate-700 mb-1">Pemasok (Vendor) *</label>
+                        <select id="reorder-supplier-id" required class="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 outline-none">
+                            <option value="">Pilih Vendor...</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block font-semibold text-slate-700 mb-1">Gudang Tujuan *</label>
+                        <select id="reorder-facility-id" required class="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 outline-none">
+                            <option value="">Pilih Gudang...</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                        <label class="block font-semibold text-slate-700 mb-1">Kuantitas Pesan *</label>
+                        <input type="number" id="reorder-quantity-input" min="1" required oninput="updateReorderModalTotal()" class="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 outline-none font-bold text-blue-700">
+                    </div>
+                    <div>
+                        <label class="block font-semibold text-slate-700 mb-1">Harga Pokok (HPP) Rp</label>
+                        <input type="number" id="reorder-cost-input" min="0" step="100" oninput="updateReorderModalTotal()" class="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 outline-none">
+                    </div>
+                </div>
+
+                <div class="p-3 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-between">
+                    <span class="text-slate-600 font-medium">Estimasi Nilai PO:</span>
+                    <span id="reorder-display-total-amount" class="text-sm font-black text-slate-900">Rp 0</span>
+                </div>
+
+                <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+                    <button type="button" onclick="closeModal('modal-confirm-reorder-po')" class="px-4 py-2 rounded-xl bg-slate-100 text-slate-700 font-medium hover:bg-slate-200">Batal</button>
+                    <button type="submit" id="btn-submit-reorder-po" class="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold shadow-sm transition flex items-center gap-1.5">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                        Buat Draft PO Sekarang
+                    </button>
+                </div>
+            </form>
         </div>
     </div>
 

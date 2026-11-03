@@ -94,6 +94,7 @@ CREATE TABLE `suppliers` (
     `phone` VARCHAR(30) DEFAULT NULL,
     `email` VARCHAR(100) DEFAULT NULL,
     `address` TEXT DEFAULT NULL,
+    `lead_time_days` INT NOT NULL DEFAULT 7,
     `is_active` BOOLEAN NOT NULL DEFAULT TRUE,
     `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     INDEX `idx_supplier_code` (`supplier_code`)
@@ -134,6 +135,7 @@ CREATE TABLE `products` (
     `category` VARCHAR(100) NOT NULL,
     `unit` VARCHAR(50) NOT NULL DEFAULT 'Pcs',
     `min_stock` INT NOT NULL DEFAULT 10,
+    `reorder_quantity` INT NOT NULL DEFAULT 0,
     `cost_price` DECIMAL(15, 2) NOT NULL DEFAULT 0.00,
     `description` TEXT DEFAULT NULL,
     `is_active` BOOLEAN NOT NULL DEFAULT TRUE,
@@ -465,10 +467,10 @@ INSERT INTO `categories` (`category_id`, `category_name`, `description`) VALUES
 (4, 'Bahan Kimia & Pembersih', 'Sanitizer dan desinfektan biosekuriti kandang & gudang');
 
 -- 3. Seed Suppliers
-INSERT INTO `suppliers` (`supplier_id`, `supplier_code`, `supplier_name`, `contact_person`, `phone`, `email`, `address`) VALUES
-(1, 'SUP-001', 'PT Charoen Feedmill Indonesia', 'Hendro Wijaya', '0812-3456-7890', 'hendro@feedmill.co.id', 'Kawasan Industri Medan (KIM) II'),
-(2, 'SUP-002', 'PT Salim Ivomas Pratama', 'Dewi Lestari', '0813-9876-5432', 'dewi@salimivomas.com', 'Jl. Tanjung Morawa Km 12'),
-(3, 'SUP-003', 'CV Berkah Unggas Nusantara', 'Rahmat Hidayat', '0852-1122-3344', 'rahmat@unggasnusantara.com', 'Deli Serdang, Sumatera Utara');
+INSERT INTO `suppliers` (`supplier_id`, `supplier_code`, `supplier_name`, `contact_person`, `phone`, `email`, `address`, `lead_time_days`) VALUES
+(1, 'SUP-001', 'PT Charoen Feedmill Indonesia', 'Hendro Wijaya', '0812-3456-7890', 'hendro@feedmill.co.id', 'Kawasan Industri Medan (KIM) II', 5),
+(2, 'SUP-002', 'PT Salim Ivomas Pratama', 'Dewi Lestari', '0813-9876-5432', 'dewi@salimivomas.com', 'Jl. Tanjung Morawa Km 12', 7),
+(3, 'SUP-003', 'CV Berkah Unggas Nusantara', 'Rahmat Hidayat', '0852-1122-3344', 'rahmat@unggasnusantara.com', 'Deli Serdang, Sumatera Utara', 3);
 
 
 
