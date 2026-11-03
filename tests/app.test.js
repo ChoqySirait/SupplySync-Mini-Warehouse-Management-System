@@ -121,4 +121,21 @@ describe('Express In-Memory Routing & Security Tests (Zero Network Sockets)', ()
 
         app.handle(req, res);
     });
+
+    test('5. Endpoint GET /api/system/backups merespons dengan daftar berkas', (t, done) => {
+        const { req, res, getStatusCode, getBody } = createMockRequestResponse({
+            method: 'GET',
+            url: '/api/system/backups'
+        });
+
+        res.on('finish', () => {
+            assert.strictEqual(getStatusCode(), 200);
+            const body = getBody();
+            assert.strictEqual(body.status, 'Success');
+            assert.ok(Array.isArray(body.data.backups));
+            done();
+        });
+
+        app.handle(req, res);
+    });
 });

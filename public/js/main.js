@@ -1460,6 +1460,176 @@ function printCurrentStockCard() {
     }
 }
 
+function exportStockCardToCSV() {
+    if (!currentStockCardData || !currentStockCardData.product) {
+        showToast('Muat data kartu stok terlebih dahulu sebelum ekspor CSV.', 'warning');
+        return;
+    }
+
+    const productId = currentStockCardData.product.product_id;
+    const startDate = document.getElementById('sc-start-date').value;
+    const endDate = document.getElementById('sc-end-date').value;
+
+    let downloadUrl = `/api/reports/stock-card?product_id=${encodeURIComponent(productId)}&format=csv`;
+    if (startDate) downloadUrl += `&start_date=${encodeURIComponent(startDate)}`;
+    if (endDate) downloadUrl += `&end_date=${encodeURIComponent(endDate)}`;
+
+    const link = document.createElement('a');
+    link.href = downloadUrl;
+    link.setAttribute('download', `KartuStok_${productId}_${new Date().toISOString().slice(0, 10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    showToast(`Mengunduh berkas CSV Kartu Stok untuk SKU ${productId}...`, 'success');
+}
+
+function openSystemDiagnosticsModal() {
+    openModal('modal-system-diagnostics');
+    loadSystemDiagnostics();
+}
+
+async function loadSystemDiagnostics() {
+    const bannerBox = document.getElementById('diag-banner-box');
+    const scoreCircle = document.getElementById('diag-score-circle');
+    const statusTitle = document.getElementById('diag-status-title');
+    const statusBadge = document.getElementById('diag-status-badge');
+    const statusDesc = document.getElementById('diag-status-desc');
+
+    const checkDiscrepancy = document.getElementById('diag-check-discrepancy');
+    const checkNegative = document.getElementById('diag-check-negative');
+    const checkOrphanedBatches = document.getElementById('diag-check-orphaned-batches');
+    const checkOrphanedItems = document.getElementById('diag-check-orphaned-items');
+    const checkExpired = document.getElementById('diag-check-expired');
+    const checkLocations = document.getElementById('diag-check-locations');
+    const backupsTbody = document.getElementById('diag-backups-tbody');
+    const backupCount = document.getElementById('diag-backup-count');
+
+    try {
+        const [healthRes, backupsRes] = await Promise.all([
+            fetch('/api/system/health-check'),
+            fetch('/api/system/backups')
+        ]);
+
+        const healthJson = await healthRes.json();
+        const backupsJson = await backupsRes.json();
+
+        if (healthJson.status === 'Success' && healthJson.data) {
+            const h = healthJson.data;
+            const anomalies = h.anomalies || {};
+
+            scoreCircle.innerText = `${h.score}%`;
+            if (h.status === 'HEALTHY') {
+                bannerBox.className = 'p-4 rounded-xl border flex flex-col sm:flex-row items-center justify-between gap-4 bg-emerald-50/70 border-emerald-200';
+                scoreCircle.className = 'w-12 h-12 rounded-xl flex items-center justify-center font-black text-lg shadow-sm bg-emerald-600 text-white';
+                statusTitle.innerText = 'Sistem & Integritas Data Prima';
+                statusBadge.className = 'px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200';
+                statusBadge.innerText = '100% HEALTHY';
+                statusDesc.innerText = `Semua ${h.summary.total_checks} kriteria audit database dan konsistensi stok lolos verifikasi referensial.`;
+            } else if (h.status === 'WARNING') {
+                bannerBox.className = 'p-4 rounded-xl border flex flex-col sm:flex-row items-center justify-between gap-4 bg-amber-50/70 border-amber-200';
+                scoreCircle.className = 'w-12 h-12 rounded-xl flex items-center justify-center font-black text-lg shadow-sm bg-amber-500 text-white';
+                statusTitle.innerText = 'Peringatan Operasional Terdeteksi';
+                statusBadge.className = 'px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200';
+                statusBadge.innerText = 'WARNING';
+                statusDesc.innerText = `Ditemukan ${h.summary.warnings} peringatan non-kritis (batch kedaluwarsa atau tanpa lokasi rak).`;
+            } else {
+                bannerBox.className = 'p-4 rounded-xl border flex flex-col sm:flex-row items-center justify-between gap-4 bg-rose-50/70 border-rose-200';
+                scoreCircle.className = 'w-12 h-12 rounded-xl flex items-center justify-center font-black text-lg shadow-sm bg-rose-600 text-white';
+                statusTitle.innerText = 'Inkonsistensi Kritis Ditemukan!';
+                statusBadge.className = 'px-2 py-0.5 rounded text-[10px] font-bold bg-rose-100 text-rose-800 border border-rose-200';
+                statusBadge.innerText = 'CRITICAL';
+                statusDesc.innerText = `Terdeteksi ${h.summary.critical_issues} anomali integritas (perbedaan stok master vs batch atau kuantitas negatif).`;
+            }
+
+            const discCount = anomalies.stock_discrepancies ? anomalies.stock_discrepancies.length : 0;
+            checkDiscrepancy.innerText = discCount === 0 ? '0 Selisih (Konsisten)' : `${discCount} Selisih Ditemukan!`;
+            checkDiscrepancy.className = `text-sm font-bold mt-1 block ${discCount === 0 ? 'text-emerald-600' : 'text-rose-600'}`;
+
+            const negCount = anomalies.negative_quantities ? anomalies.negative_quantities.length : 0;
+            checkNegative.innerText = negCount === 0 ? '0 Terdeteksi (Aman)' : `${negCount} Negatif Ditemukan!`;
+            checkNegative.className = `text-sm font-bold mt-1 block ${negCount === 0 ? 'text-emerald-600' : 'text-rose-600'}`;
+
+            const orphanBatchCount = anomalies.orphaned_batches ? anomalies.orphaned_batches.length : 0;
+            checkOrphanedBatches.innerText = orphanBatchCount === 0 ? '0 Batch (Valid)' : `${orphanBatchCount} Batch Yatim!`;
+            checkOrphanedBatches.className = `text-sm font-bold mt-1 block ${orphanBatchCount === 0 ? 'text-emerald-600' : 'text-rose-600'}`;
+
+            const orphanItemCount = anomalies.orphaned_transaction_items ? anomalies.orphaned_transaction_items.length : 0;
+            checkOrphanedItems.innerText = orphanItemCount === 0 ? '0 Item (Valid)' : `${orphanItemCount} Item Yatim!`;
+            checkOrphanedItems.className = `text-sm font-bold mt-1 block ${orphanItemCount === 0 ? 'text-emerald-600' : 'text-rose-600'}`;
+
+            const expCount = anomalies.expired_active_batches ? anomalies.expired_active_batches.length : 0;
+            checkExpired.innerText = expCount === 0 ? '0 Batch Expired' : `${expCount} Batch Perlu Afkir`;
+            checkExpired.className = `text-sm font-bold mt-1 block ${expCount === 0 ? 'text-emerald-600' : 'text-amber-600'}`;
+
+            const locCount = anomalies.unassigned_locations ? anomalies.unassigned_locations.length : 0;
+            checkLocations.innerText = locCount === 0 ? '0 Batch Tanpa Rak' : `${locCount} Batch Perlu Rak`;
+            checkLocations.className = `text-sm font-bold mt-1 block ${locCount === 0 ? 'text-emerald-600' : 'text-amber-600'}`;
+        }
+
+        if (backupsJson.status === 'Success' && backupsJson.data) {
+            const list = backupsJson.data.backups || [];
+            backupCount.innerText = `${list.length} File Cadangan`;
+            backupsTbody.innerHTML = '';
+
+            if (list.length === 0) {
+                backupsTbody.innerHTML = `<tr><td colspan="4" class="p-4 text-center text-slate-400 font-sans">Belum ada berkas cadangan snapshot. Buat cadangan baru sekarang.</td></tr>`;
+            } else {
+                list.forEach(b => {
+                    const tr = document.createElement('tr');
+                    tr.className = 'hover:bg-slate-50 transition border-b border-slate-100';
+                    tr.innerHTML = `
+                        <td class="p-2.5 font-bold text-slate-800">${escapeHtml(b.filename)}</td>
+                        <td class="p-2.5 text-slate-600">${escapeHtml(b.size_kb)} KB</td>
+                        <td class="p-2.5 text-slate-500">${new Date(b.created_at).toLocaleString('id-ID')}</td>
+                        <td class="p-2.5 text-right font-sans">
+                            <a href="/api/system/backups/${encodeURIComponent(b.filename)}" download class="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded font-semibold text-[10px] inline-flex items-center gap-1">
+                                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+                                Unduh
+                            </a>
+                        </td>
+                    `;
+                    backupsTbody.appendChild(tr);
+                });
+            }
+        }
+    } catch (err) {
+        showToast('Gagal memuat diagnostik sistem: ' + err.message, 'error');
+    }
+}
+
+async function triggerDatabaseBackup() {
+    const btn = document.getElementById('btn-trigger-backup');
+    btn.disabled = true;
+    btn.innerHTML = `<span class="animate-spin inline-block w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full"></span> Menyimpan...`;
+
+    try {
+        const res = await fetch('/api/system/backup', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${sessionStorage.getItem('supplysync_token') || ''}`
+            }
+        });
+        const json = await res.json();
+
+        if (json.status === 'Success') {
+            showToast(`Cadangan database berhasil dibuat: ${json.data.filename} (${json.data.total_records} record)`, 'success');
+            loadSystemDiagnostics();
+        } else {
+            showToast(json.message || 'Gagal membuat cadangan database.', 'error');
+        }
+    } catch (err) {
+        showToast('Kesalahan jaringan: ' + err.message, 'error');
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = `
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"/></svg>
+            Buat Backup Sekarang
+        `;
+    }
+}
+
 // Inisialisasi saat DOM siap & Pasang Barcode Scanner Event Listener
 document.addEventListener('DOMContentLoaded', () => {
     loadDashboardData();

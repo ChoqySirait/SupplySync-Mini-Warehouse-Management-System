@@ -1,4 +1,5 @@
 const db = require('../config/database');
+const { serializeToCsv } = require('../utils/csvParser');
 
 /**
  * SupplySync WMS - Inventory Reporting & Stock Card Ledger
@@ -139,6 +140,39 @@ exports.getStockCardReport = async (req, res) => {
                 created_at: row.created_at
             };
         });
+
+        // 5. Ekspor format CSV jika diminta
+        if (req.query.format === 'csv') {
+            const csvRows = movements.map(m => ({
+                Tanggal: typeof m.created_at === 'string' ? m.created_at : new Date(m.created_at).toISOString(),
+                No_Referensi: m.reference_no,
+                Tipe_Transaksi: m.transaction_type,
+                Masuk: m.in_quantity,
+                Keluar: m.out_quantity,
+                Saldo_Berjalan: m.balance_after,
+                Operator: m.operator,
+                Keterangan: m.notes
+            }));
+
+            // Tambahkan baris saldo awal jika ada
+            if (start_date) {
+                csvRows.unshift({
+                    Tanggal: `${start_date} 00:00:00`,
+                    No_Referensi: 'SALDO-AWAL',
+                    Tipe_Transaksi: 'BEGINNING',
+                    Masuk: beginningBalance >= 0 ? beginningBalance : 0,
+                    Keluar: beginningBalance < 0 ? Math.abs(beginningBalance) : 0,
+                    Saldo_Berjalan: beginningBalance,
+                    Operator: 'Sistem',
+                    Keterangan: `Saldo Awal sebelum ${start_date}`
+                });
+            }
+
+            const csvString = '\uFEFF' + serializeToCsv(csvRows);
+            res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+            res.setHeader('Content-Disposition', `attachment; filename="KartuStok_${product_id}_${new Date().toISOString().slice(0, 10)}.csv"`);
+            return res.send(csvString);
+        }
 
         res.json({
             status: 'Success',

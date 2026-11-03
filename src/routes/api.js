@@ -9,6 +9,7 @@ const locationController = require('../controllers/locationController');
 const authController = require('../controllers/authController');
 const analyticsController = require('../controllers/analyticsController');
 const reportController = require('../controllers/reportController');
+const systemController = require('../controllers/systemController');
 
 const validator = require('../middlewares/validator');
 const { authenticateToken, optionalAuth, authorizeRole } = require('../middlewares/authMiddleware');
@@ -55,5 +56,11 @@ router.post('/categories', optionalAuth, categoryController.createCategory);
 // 6. Routes Lokasi Rak / Bin Gudang (Warehouse Locations)
 router.get('/locations', locationController.getAllLocations);
 router.post('/locations', optionalAuth, locationController.createLocation);
+
+// 7. Routes Diagnostik Sistem, Verifikasi Integritas & Backup Database
+router.get('/system/health-check', systemController.getHealthAndIntegrity);
+router.get('/system/backups', optionalAuth, systemController.getBackupsList);
+router.post('/system/backup', optionalAuth, systemController.createBackup);
+router.get('/system/backups/:filename', optionalAuth, systemController.downloadBackupFile);
 
 module.exports = router;

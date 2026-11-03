@@ -22,6 +22,11 @@ coverage/
 *.lcov
 .nyc_output
 
+# Backups & Database Snapshots
+backups/*.json
+backups/*.sql
+backups/*.dump
+
 # OS generated files
 .DS_Store
 Thumbs.db

@@ -110,6 +110,10 @@
                 <span class="px-3 py-1 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1.5">
                     <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> MySQL Connected
                 </span>
+                <button onclick="openSystemDiagnosticsModal()" class="px-3 py-1.5 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 text-xs text-slate-700 font-medium flex items-center gap-1.5 transition" title="Diagnostik Integritas Stok & Snapshot Database">
+                    <svg class="w-3.5 h-3.5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
+                    <span class="hidden sm:inline">Integritas & Backup</span>
+                </button>
                 <button onclick="loadDashboardData()" class="p-2 text-slate-500 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 rounded-lg transition" title="Refresh Data (Perbarui)">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
                 </button>
@@ -918,6 +922,10 @@
                 </div>
 
                 <div class="flex items-center gap-2 mt-3.5">
+                    <button onclick="exportStockCardToCSV()" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold text-xs flex items-center gap-1.5 shadow-xs transition" title="Unduh Buku Pembantu Kartu Stok Format Spreadsheet CSV">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+                        Ekspor CSV
+                    </button>
                     <button onclick="printCurrentStockCard()" class="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-bold text-xs flex items-center gap-1.5 shadow-xs transition" title="Cetak Kartu Stok ke Kertas A4">
                         <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/></svg>
                         Cetak Kartu Stok
@@ -967,6 +975,103 @@
 
             <div class="flex justify-end pt-3 border-t border-slate-100 mt-3">
                 <button type="button" onclick="closeModal('modal-stock-card')" class="px-4 py-2 rounded-xl bg-slate-100 text-slate-700 font-medium hover:bg-slate-200 text-xs">Tutup</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal 13: System Diagnostics & Database Backup -->
+    <div id="modal-system-diagnostics" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-3xl w-full p-6 relative max-h-[90vh] flex flex-col">
+            <div class="flex items-center justify-between pb-3 border-b border-slate-100 mb-4">
+                <div>
+                    <span class="text-[10px] font-bold uppercase tracking-wider text-indigo-700 bg-indigo-50 px-2.5 py-0.5 rounded border border-indigo-200">Keamanan & Keandalan Sistem</span>
+                    <h3 class="text-base font-bold text-slate-900 mt-1">Diagnostik Integritas Stok & Cadangan Database</h3>
+                    <p class="text-xs text-slate-500">Verifikasi referensial, anomali saldo master vs batch, dan snapshot database berkala.</p>
+                </div>
+                <button onclick="closeModal('modal-system-diagnostics')" class="text-slate-400 hover:text-slate-700 text-xl font-bold">&times;</button>
+            </div>
+
+            <div class="overflow-y-auto space-y-4 flex-1 text-xs pr-1">
+                <!-- Health Banner -->
+                <div class="p-4 rounded-xl border flex flex-col sm:flex-row items-center justify-between gap-4 bg-slate-50" id="diag-banner-box">
+                    <div class="flex items-center gap-3">
+                        <div class="w-12 h-12 rounded-xl flex items-center justify-center font-black text-lg shadow-sm" id="diag-score-circle">
+                            100%
+                        </div>
+                        <div>
+                            <div class="flex items-center gap-2">
+                                <h4 class="font-bold text-sm text-slate-900" id="diag-status-title">Memeriksa Integritas Sistem...</h4>
+                                <span class="px-2 py-0.5 rounded text-[10px] font-bold" id="diag-status-badge">PENGECEKAN</span>
+                            </div>
+                            <p class="text-xs text-slate-500 mt-0.5" id="diag-status-desc">Menjalankan 6 aturan validasi integritas database & konsistensi stok...</p>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-2 shrink-0">
+                        <button onclick="loadSystemDiagnostics()" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg font-bold text-xs flex items-center gap-1.5 transition">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                            Audit Ulang
+                        </button>
+                        <button onclick="triggerDatabaseBackup()" id="btn-trigger-backup" class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-bold text-xs flex items-center gap-1.5 shadow-sm transition">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"/></svg>
+                            Buat Backup Sekarang
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 6 Diagnostic Checks Grid -->
+                <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                    <div class="p-3 rounded-xl border border-slate-200 bg-white">
+                        <span class="text-[10px] text-slate-400 font-bold uppercase block">Stok Master vs Batch</span>
+                        <span class="text-sm font-bold text-emerald-600 mt-1 block" id="diag-check-discrepancy">0 Selisih (Konsisten)</span>
+                    </div>
+                    <div class="p-3 rounded-xl border border-slate-200 bg-white">
+                        <span class="text-[10px] text-slate-400 font-bold uppercase block">Kuantitas Negatif</span>
+                        <span class="text-sm font-bold text-emerald-600 mt-1 block" id="diag-check-negative">0 Terdeteksi (Aman)</span>
+                    </div>
+                    <div class="p-3 rounded-xl border border-slate-200 bg-white">
+                        <span class="text-[10px] text-slate-400 font-bold uppercase block">Batch Yatim (Orphan)</span>
+                        <span class="text-sm font-bold text-emerald-600 mt-1 block" id="diag-check-orphaned-batches">0 Batch (Valid)</span>
+                    </div>
+                    <div class="p-3 rounded-xl border border-slate-200 bg-white">
+                        <span class="text-[10px] text-slate-400 font-bold uppercase block">Item Mutasi Yatim</span>
+                        <span class="text-sm font-bold text-emerald-600 mt-1 block" id="diag-check-orphaned-items">0 Item (Valid)</span>
+                    </div>
+                    <div class="p-3 rounded-xl border border-slate-200 bg-white">
+                        <span class="text-[10px] text-slate-400 font-bold uppercase block">Batch Expired Aktif</span>
+                        <span class="text-sm font-bold text-slate-700 mt-1 block" id="diag-check-expired">0 Batch</span>
+                    </div>
+                    <div class="p-3 rounded-xl border border-slate-200 bg-white">
+                        <span class="text-[10px] text-slate-400 font-bold uppercase block">Batch Tanpa Rak</span>
+                        <span class="text-sm font-bold text-slate-700 mt-1 block" id="diag-check-locations">0 Batch</span>
+                    </div>
+                </div>
+
+                <!-- Backups History Table -->
+                <div class="border border-slate-200 rounded-xl overflow-hidden bg-white">
+                    <div class="p-3 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+                        <span class="font-bold text-slate-800 text-xs">Berkas Cadangan Snapshot Tersimpan</span>
+                        <span class="text-[10px] text-slate-500 font-mono" id="diag-backup-count">0 File Cadangan</span>
+                    </div>
+                    <div class="max-h-48 overflow-y-auto">
+                        <table class="w-full text-left">
+                            <thead class="bg-slate-100 text-slate-500 text-[10px] uppercase font-semibold border-b border-slate-200">
+                                <tr>
+                                    <th class="p-2.5">Nama Berkas</th>
+                                    <th class="p-2.5">Ukuran</th>
+                                    <th class="p-2.5">Waktu Pencadangan</th>
+                                    <th class="p-2.5 text-right">Aksi</th>
+                                </tr>
+                            </thead>
+                            <tbody id="diag-backups-tbody" class="divide-y divide-slate-100 font-mono text-[11px]">
+                                <tr><td colspan="4" class="p-4 text-center text-slate-400 font-sans">Memuat daftar cadangan...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex justify-end pt-3 border-t border-slate-100 mt-3">
+                <button type="button" onclick="closeModal('modal-system-diagnostics')" class="px-4 py-2 rounded-xl bg-slate-100 text-slate-700 font-medium hover:bg-slate-200 text-xs">Tutup</button>
             </div>
         </div>
     </div>

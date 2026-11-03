@@ -7,7 +7,9 @@
     "start": "node app.js",
     "dev": "nodemon app.js",
     "test": "node --test tests/**/*.test.js",
-    "db:init": "node database/init.js"
+    "db:init": "node database/init.js",
+    "db:backup": "node scripts/dbBackup.js --backup",
+    "db:verify": "node scripts/dbBackup.js --verify"
   },
   "repository": {
     "type": "git",
