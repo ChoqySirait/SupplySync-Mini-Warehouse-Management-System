@@ -35,3 +35,32 @@ body {
     color: #ffffff !important;
     box-shadow: 0 4px 12px 0 rgba(37, 99, 235, 0.25);
 }
+
+/* Toast Notification Animation */
+@keyframes slideInRight {
+    from {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+@keyframes fadeOut {
+    from {
+        opacity: 1;
+    }
+    to {
+        opacity: 0;
+    }
+}
+
+.toast-enter {
+    animation: slideInRight 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.toast-exit {
+    animation: fadeOut 0.3s ease-out forwards;
+}

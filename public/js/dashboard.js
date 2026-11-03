@@ -1,34 +1,16 @@
-// Pengelolaan Fitur Pencarian Real-Time di Tabel
-document.addEventListener('DOMContentLoaded', () => {
-    const searchInput = document.getElementById('search-input');
-    
-    if (searchInput) {
-        searchInput.addEventListener('keyup', (e) => {
-            const keyword = e.target.value.toLowerCase();
-            const rows = document.querySelectorAll('#product-table-body tr');
+/**
+ * SupplySync WMS - Dashboard Keyboard Shortcuts & Helpers
+ */
 
-            rows.forEach(row => {
-                const text = row.innerText.toLowerCase();
-                if (text.includes(keyword)) {
-                    row.style.display = '';
-                } else {
-                    row.style.display = 'none';
-                }
-            });
-        });
+document.addEventListener('keydown', (e) => {
+    // Ctrl + K atau / untuk fokus ke kotak pencarian inventaris
+    if ((e.ctrlKey && e.key.toLowerCase() === 'k') || (e.key === '/' && document.activeElement.tagName !== 'INPUT')) {
+        const searchInput = document.getElementById('search-input');
+        if (searchInput) {
+            e.preventDefault();
+            switchTab('inventory');
+            searchInput.focus();
+            searchInput.select();
+        }
     }
 });
-
-// Fungsi Mengambil Audit Log Transaksi
-async function loadTransactionLogs() {
-    try {
-        const response = await fetch('/api/transactions');
-        const result = await response.json();
-        
-        if (result.status === 'Success') {
-            console.log('📋 Audit Log Loaded:', result.data);
-        }
-    } catch (error) {
-        console.error('❌ Error loading logs:', error);
-    }
-}
