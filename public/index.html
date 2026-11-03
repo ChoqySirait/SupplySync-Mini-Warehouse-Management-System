@@ -887,6 +887,90 @@
         </div>
     </div>
 
+    <!-- Modal 12: Stock Card Ledger (Kartu Stok Persediaan) -->
+    <div id="modal-stock-card" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-4xl w-full p-6 relative max-h-[90vh] flex flex-col">
+            <div class="flex items-center justify-between pb-3 border-b border-slate-100">
+                <div>
+                    <span class="text-[10px] font-bold uppercase tracking-wider text-purple-700 bg-purple-50 px-2.5 py-0.5 rounded border border-purple-200">Audit Persediaan & Ledger</span>
+                    <h3 class="text-base font-bold text-slate-900 mt-1" id="sc-modal-title">Kartu Stok Persediaan</h3>
+                    <p class="text-xs text-slate-500" id="sc-modal-sub">Rekonsiliasi saldo berjalan historis per produk SKU</p>
+                </div>
+                <button onclick="closeModal('modal-stock-card')" class="text-slate-400 hover:text-slate-700 text-xl font-bold">&times;</button>
+            </div>
+
+            <input type="hidden" id="sc-product-id">
+
+            <!-- Filter Periode & Action Buttons -->
+            <div class="flex flex-wrap items-center justify-between gap-3 py-3 border-b border-slate-100 text-xs">
+                <div class="flex items-center gap-2">
+                    <div>
+                        <label class="block text-[10px] font-bold text-slate-500 uppercase">Dari Tanggal:</label>
+                        <input type="date" id="sc-start-date" class="bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1 text-slate-800 outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-bold text-slate-500 uppercase">Sampai Tanggal:</label>
+                        <input type="date" id="sc-end-date" class="bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1 text-slate-800 outline-none">
+                    </div>
+                    <button onclick="loadStockCardReport()" class="mt-3.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold text-xs shadow-xs transition">
+                        Terapkan
+                    </button>
+                </div>
+
+                <div class="flex items-center gap-2 mt-3.5">
+                    <button onclick="printCurrentStockCard()" class="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-bold text-xs flex items-center gap-1.5 shadow-xs transition" title="Cetak Kartu Stok ke Kertas A4">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/></svg>
+                        Cetak Kartu Stok
+                    </button>
+                </div>
+            </div>
+
+            <!-- KPI Summary Bar -->
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 my-3 text-xs">
+                <div class="p-2.5 rounded-xl bg-slate-50 border border-slate-200">
+                    <span class="text-[10px] uppercase font-bold text-slate-400 block">Saldo Awal</span>
+                    <span class="text-base font-extrabold text-slate-800" id="sc-kpi-beg">0 Unit</span>
+                </div>
+                <div class="p-2.5 rounded-xl bg-emerald-50/60 border border-emerald-200">
+                    <span class="text-[10px] uppercase font-bold text-emerald-700 block">Total Masuk (+)</span>
+                    <span class="text-base font-extrabold text-emerald-600" id="sc-kpi-in">+0 Unit</span>
+                </div>
+                <div class="p-2.5 rounded-xl bg-rose-50/60 border border-rose-200">
+                    <span class="text-[10px] uppercase font-bold text-rose-700 block">Total Keluar (-)</span>
+                    <span class="text-base font-extrabold text-rose-600" id="sc-kpi-out">-0 Unit</span>
+                </div>
+                <div class="p-2.5 rounded-xl bg-blue-50/60 border border-blue-200">
+                    <span class="text-[10px] uppercase font-bold text-blue-700 block">Saldo Akhir</span>
+                    <span class="text-base font-extrabold text-blue-700" id="sc-kpi-end">0 Unit</span>
+                </div>
+            </div>
+
+            <!-- Ledger Table Container -->
+            <div class="overflow-y-auto flex-1 border border-slate-200 rounded-xl text-xs">
+                <table class="w-full text-left">
+                    <thead class="bg-slate-100 text-slate-600 font-semibold uppercase text-[10px] tracking-wider sticky top-0 border-b border-slate-200">
+                        <tr>
+                            <th class="p-3">Waktu</th>
+                            <th class="p-3">No. Referensi</th>
+                            <th class="p-3">Mutasi / Catatan</th>
+                            <th class="p-3 text-right">Masuk (+)</th>
+                            <th class="p-3 text-right">Keluar (-)</th>
+                            <th class="p-3 text-right">Saldo Berjalan</th>
+                            <th class="p-3 text-center">Operator</th>
+                        </tr>
+                    </thead>
+                    <tbody id="sc-ledger-tbody" class="divide-y divide-slate-100">
+                        <tr><td colspan="7" class="p-6 text-center text-slate-400">Memuat mutasi kartu stok...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="flex justify-end pt-3 border-t border-slate-100 mt-3">
+                <button type="button" onclick="closeModal('modal-stock-card')" class="px-4 py-2 rounded-xl bg-slate-100 text-slate-700 font-medium hover:bg-slate-200 text-xs">Tutup</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Script Frontend JS -->
     <script src="js/barcode.js"></script>
     <script src="js/documents.js"></script>

@@ -380,6 +380,9 @@ function renderProductTable(products) {
                 <button onclick="printProductSkuLabel('${escapeHtml(item.product_id)}', '${escapeHtml(item.product_name)}', '${escapeHtml(item.category)}', '${escapeHtml(item.unit)}')" class="px-2.5 py-1 text-[11px] font-semibold bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-lg transition" title="Cetak Barcode SKU">
                     Barcode
                 </button>
+                <button onclick="openStockCardModal('${escapeHtml(item.product_id)}', '${escapeHtml(item.product_name)}')" class="px-2.5 py-1 text-[11px] font-semibold bg-purple-50 hover:bg-purple-100 text-purple-700 rounded-lg transition" title="Buka Kartu Stok & Laporan Mutasi Saldo">
+                    Ledger
+                </button>
                 <button onclick="showBatchDetails('${escapeHtml(item.product_id)}')" class="px-2.5 py-1 text-[11px] font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg transition" title="Lihat rincian batch & lokasi rak">
                     Batch
                 </button>
@@ -1355,6 +1358,105 @@ async function submitImportInboundCsv() {
         showToast('Kesalahan jaringan: ' + err.message, 'error');
     } finally {
         if (btn) btn.disabled = false;
+    }
+}
+
+// --------------------------------------------------------------------
+// 13. KARTU STOK PERSEDIAAN (STOCK CARD LEDGER)
+// --------------------------------------------------------------------
+let currentStockCardData = null;
+
+function openStockCardModal(productId, productName) {
+    document.getElementById('sc-product-id').value = productId;
+    document.getElementById('sc-modal-title').innerText = `Kartu Stok Persediaan: ${productId}`;
+    document.getElementById('sc-modal-sub').innerText = productName || 'Laporan Rekonsiliasi Saldo Berjalan';
+
+    const today = new Date();
+    const endStr = today.toISOString().split('T')[0];
+    const past = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
+    const startStr = past.toISOString().split('T')[0];
+
+    document.getElementById('sc-start-date').value = startStr;
+    document.getElementById('sc-end-date').value = endStr;
+
+    openModal('modal-stock-card');
+    loadStockCardReport();
+}
+
+async function loadStockCardReport() {
+    const productId = document.getElementById('sc-product-id').value;
+    const startDate = document.getElementById('sc-start-date').value;
+    const endDate = document.getElementById('sc-end-date').value;
+
+    if (!productId) return;
+
+    const tbody = document.getElementById('sc-ledger-tbody');
+    tbody.innerHTML = `<tr><td colspan="7" class="p-6 text-center text-slate-400">Menghitung saldo dan memuat mutasi...</td></tr>`;
+
+    let url = `/api/reports/stock-card?product_id=${encodeURIComponent(productId)}`;
+    if (startDate) url += `&start_date=${encodeURIComponent(startDate)}`;
+    if (endDate) url += `&end_date=${encodeURIComponent(endDate)}`;
+
+    try {
+        const res = await fetch(url);
+        const json = await res.json();
+
+        if (json.status === 'Success' && json.data) {
+            currentStockCardData = json.data;
+            const data = json.data;
+            const unit = (data.product && data.product.unit) || 'Unit';
+
+            document.getElementById('sc-kpi-beg').innerText = `${data.beginning_balance} ${unit}`;
+            document.getElementById('sc-kpi-in').innerText = `+${data.summary.total_in} ${unit}`;
+            document.getElementById('sc-kpi-out').innerText = `-${data.summary.total_out + data.summary.total_disposal} ${unit}`;
+            document.getElementById('sc-kpi-end').innerText = `${data.ending_balance} ${unit}`;
+
+            tbody.innerHTML = '';
+            if (data.movements && data.movements.length > 0) {
+                data.movements.forEach(m => {
+                    const timeFormatted = new Date(m.created_at).toLocaleString('id-ID', {
+                        dateStyle: 'medium',
+                        timeStyle: 'short'
+                    });
+
+                    const tr = document.createElement('tr');
+                    tr.className = 'hover:bg-slate-50 transition border-b border-slate-100 text-xs';
+                    tr.innerHTML = `
+                        <td class="p-3 font-mono text-slate-600">${timeFormatted}</td>
+                        <td class="p-3 font-mono font-bold text-blue-700">${escapeHtml(m.reference_no)}</td>
+                        <td class="p-3">
+                            <span class="font-bold text-slate-900">${escapeHtml(m.transaction_type)}</span>
+                            <span class="text-slate-400 text-[11px] block truncate max-w-xs">${escapeHtml(m.notes)}</span>
+                        </td>
+                        <td class="p-3 text-right font-bold text-emerald-600">${m.in_quantity > 0 ? '+' + m.in_quantity : '-'}</td>
+                        <td class="p-3 text-right font-bold text-rose-600">${m.out_quantity > 0 ? '-' + m.out_quantity : '-'}</td>
+                        <td class="p-3 text-right font-extrabold text-slate-900 bg-slate-50/50">${m.balance_after}</td>
+                        <td class="p-3 text-center text-slate-600">${escapeHtml(m.operator)}</td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            } else {
+                tbody.innerHTML = `<tr><td colspan="7" class="p-8 text-center text-slate-400">Tidak ada riwayat mutasi transaksi pada rentang tanggal ini.</td></tr>`;
+            }
+        } else {
+            showToast(json.message || 'Gagal memuat kartu stok.', 'error');
+            tbody.innerHTML = `<tr><td colspan="7" class="p-8 text-center text-rose-500">${escapeHtml(json.message || 'Terjadi kesalahan')}</td></tr>`;
+        }
+    } catch (err) {
+        showToast('Kesalahan jaringan: ' + err.message, 'error');
+        tbody.innerHTML = `<tr><td colspan="7" class="p-8 text-center text-rose-500">Gagal terhubung ke server.</td></tr>`;
+    }
+}
+
+function printCurrentStockCard() {
+    if (!currentStockCardData) {
+        showToast('Muat data kartu stok terlebih dahulu.', 'warning');
+        return;
+    }
+    if (typeof printStockLedger === 'function') {
+        printStockLedger(currentStockCardData);
+    } else {
+        showToast('Modul cetak dokumen belum siap.', 'error');
     }
 }
 

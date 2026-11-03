@@ -357,10 +357,181 @@ function printDeliveryOrder(data) {
     printWindow.document.close();
 }
 
+/**
+ * Buka jendela cetak Kartu Stok Fisik Gudang (Stock Card Ledger)
+ */
+function printStockLedger(data) {
+    if (!data || !data.product) return;
+    const p = data.product;
+    const period = data.period || {};
+    const startStr = period.start_date || 'Awal Pendataan';
+    const endStr = period.end_date || new Date().toISOString().split('T')[0];
+    const printDate = new Date().toLocaleString('id-ID', { dateStyle: 'full', timeStyle: 'short' });
+    const operator = typeof currentUser !== 'undefined' ? currentUser.full_name : 'Auditor Gudang';
+
+    const barcodeSvg = typeof generateBarcodeSvg === 'function' 
+        ? generateBarcodeSvg(p.product_id, { height: 30, showText: true }) 
+        : `<div style="font-family: monospace; font-weight: bold;">${escDoc(p.product_id)}</div>`;
+
+    const printWindow = window.open('', '_blank', 'width=900,height=950');
+    if (!printWindow) {
+        alert('Gagal membuka pop-up pencetakan. Izinkan pop-up peramban.');
+        return;
+    }
+
+    let rowsHtml = '';
+    if (data.movements && data.movements.length > 0) {
+        rowsHtml = data.movements.map(m => {
+            const timeFormatted = new Date(m.created_at).toLocaleString('id-ID', { dateStyle: 'short', timeStyle: 'short' });
+            return `
+                <tr style="border-bottom: 1px solid #cbd5e1; font-size: 10px;">
+                    <td style="padding: 6px 8px; font-family: monospace;">${escDoc(timeFormatted)}</td>
+                    <td style="padding: 6px 8px; font-family: monospace; font-weight: bold; color: #1e40af;">${escDoc(m.reference_no)}</td>
+                    <td style="padding: 6px 8px;"><strong>${escDoc(m.transaction_type)}</strong> &bull; ${escDoc(m.notes)}</td>
+                    <td style="padding: 6px 8px; text-align: right; color: #047857; font-weight: bold;">${m.in_quantity > 0 ? '+' + m.in_quantity : '-'}</td>
+                    <td style="padding: 6px 8px; text-align: right; color: #b91c1c; font-weight: bold;">${m.out_quantity > 0 ? '-' + m.out_quantity : '-'}</td>
+                    <td style="padding: 6px 8px; text-align: right; font-weight: 900; background: #f8fafc;">${m.balance_after}</td>
+                    <td style="padding: 6px 8px; text-align: center; color: #64748b;">${escDoc(m.operator)}</td>
+                </tr>
+            `;
+        }).join('');
+    } else {
+        rowsHtml = `<tr><td colspan="7" style="padding: 16px; text-align: center; color: #94a3b8;">Tidak ada riwayat mutasi transaksi pada periode ini.</td></tr>`;
+    }
+
+    printWindow.document.write(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Kartu Stok - ${escDoc(p.product_id)} (${escDoc(p.product_name)})</title>
+            <style>
+                @page { size: A4 portrait; margin: 12mm; }
+                body {
+                    font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
+                    color: #0f172a;
+                    margin: 0;
+                    padding: 16px;
+                    font-size: 11px;
+                }
+                .doc-box { border: 1px solid #94a3b8; padding: 20px; border-radius: 8px; background: #fff; }
+                .head { width: 100%; border-bottom: 2px solid #0f172a; padding-bottom: 10px; margin-bottom: 12px; }
+                .title { font-size: 18px; font-weight: 900; letter-spacing: -0.5px; }
+                .sub { font-size: 10px; color: #64748b; }
+                .kpi-table { width: 100%; border-collapse: collapse; margin-bottom: 16px; background: #f1f5f9; border-radius: 6px; }
+                .kpi-cell { padding: 8px 12px; border: 1px solid #cbd5e1; }
+                .kpi-lbl { font-size: 9px; text-transform: uppercase; color: #64748b; font-weight: bold; }
+                .kpi-val { font-size: 16px; font-weight: 900; margin-top: 2px; }
+                .ledger-table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+                .ledger-table th { background: #e2e8f0; padding: 8px 6px; text-align: left; font-size: 10px; text-transform: uppercase; border-bottom: 2px solid #94a3b8; }
+                .signatures { width: 100%; margin-top: 30px; border-collapse: collapse; }
+                .sig-box { width: 50%; text-align: center; vertical-align: top; }
+                .sig-line { height: 60px; border-bottom: 1px dashed #94a3b8; margin: 0 50px 8px 50px; }
+            </style>
+        </head>
+        <body onload="window.print()">
+            <div class="doc-box">
+                <table class="head">
+                    <tr>
+                        <td>
+                            <div style="font-size: 10px; font-weight: bold; text-transform: uppercase; color: #2563eb;">Audit & Kontrol Persediaan Logistik</div>
+                            <div class="title">KARTU STOK PERSEDIAAN (STOCK CARD LEDGER)</div>
+                            <div class="sub">SupplySync Enterprise WMS &bull; Laporan Rekonsiliasi Saldo Berjalan</div>
+                        </td>
+                        <td style="text-align: right; width: 220px;">
+                            ${barcodeSvg}
+                        </td>
+                    </tr>
+                </table>
+
+                <table style="width: 100%; margin-bottom: 14px; font-size: 11px;">
+                    <tr>
+                        <td style="width: 15%; font-weight: bold; color: #64748b;">SKU Produk</td>
+                        <td style="width: 35%; font-family: monospace; font-weight: bold;">: ${escDoc(p.product_id)}</td>
+                        <td style="width: 15%; font-weight: bold; color: #64748b;">Periode Audit</td>
+                        <td style="width: 35%;">: ${escDoc(startStr)} s/d ${escDoc(endStr)}</td>
+                    </tr>
+                    <tr>
+                        <td style="font-weight: bold; color: #64748b;">Nama Produk</td>
+                        <td style="font-weight: bold;">: ${escDoc(p.product_name)}</td>
+                        <td style="font-weight: bold; color: #64748b;">Waktu Cetak</td>
+                        <td>: ${escDoc(printDate)}</td>
+                    </tr>
+                    <tr>
+                        <td style="font-weight: bold; color: #64748b;">Kategori / Satuan</td>
+                        <td>: ${escDoc(p.category)} &bull; Satuan: ${escDoc(p.unit)}</td>
+                        <td style="font-weight: bold; color: #64748b;">Batas Minimum</td>
+                        <td>: ${p.min_stock} ${escDoc(p.unit)}</td>
+                    </tr>
+                </table>
+
+                <table class="kpi-table">
+                    <tr>
+                        <td class="kpi-cell" style="width: 25%;">
+                            <div class="kpi-lbl">Saldo Awal</div>
+                            <div class="kpi-val" style="color: #334155;">${data.beginning_balance} ${escDoc(p.unit)}</div>
+                        </td>
+                        <td class="kpi-cell" style="width: 25%;">
+                            <div class="kpi-lbl">Total Masuk (+)</div>
+                            <div class="kpi-val" style="color: #059669;">+${data.summary.total_in}</div>
+                        </td>
+                        <td class="kpi-cell" style="width: 25%;">
+                            <div class="kpi-lbl">Total Keluar (-)</div>
+                            <div class="kpi-val" style="color: #dc2626;">-${data.summary.total_out + data.summary.total_disposal}</div>
+                        </td>
+                        <td class="kpi-cell" style="width: 25%; background: #eff6ff;">
+                            <div class="kpi-lbl">Saldo Akhir Fisik</div>
+                            <div class="kpi-val" style="color: #1d4ed8;">${data.ending_balance} ${escDoc(p.unit)}</div>
+                        </td>
+                    </tr>
+                </table>
+
+                <table class="ledger-table">
+                    <thead>
+                        <tr>
+                            <th style="width: 15%;">Waktu</th>
+                            <th style="width: 20%;">No. Referensi</th>
+                            <th style="width: 27%;">Keterangan / Alur</th>
+                            <th style="width: 10%; text-align: right;">Masuk (+)</th>
+                            <th style="width: 10%; text-align: right;">Keluar (-)</th>
+                            <th style="width: 10%; text-align: right;">Saldo</th>
+                            <th style="width: 8%; text-align: center;">Operator</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${rowsHtml}
+                    </tbody>
+                </table>
+
+                <table class="signatures">
+                    <tr>
+                        <td class="sig-box">
+                            <div style="font-weight: bold;">Dibuat Oleh (Admin Logistik)</div>
+                            <div class="sig-line"></div>
+                            <div style="font-size: 10px; color: #64748b;">${escDoc(operator)}</div>
+                        </td>
+                        <td class="sig-box">
+                            <div style="font-weight: bold;">Disetujui Oleh (Kepala Gudang)</div>
+                            <div class="sig-line"></div>
+                            <div style="font-size: 10px; color: #64748b;">Supervisor / Warehouse Manager</div>
+                        </td>
+                    </tr>
+                </table>
+
+                <div style="margin-top: 20px; text-align: center; font-size: 9px; color: #94a3b8; border-top: 1px solid #e2e8f0; padding-top: 6px;">
+                    Dokumen Kartu Stok Resmi SupplySync WMS &bull; Dicetak secara otomatis dengan integritas data audit trail tanpa manipulasi.
+                </div>
+            </div>
+        </body>
+        </html>
+    `);
+    printWindow.document.close();
+}
+
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = {
         printGoodsReceiptNote,
         printDeliveryOrder,
+        printStockLedger,
         escDoc
     };
 }
