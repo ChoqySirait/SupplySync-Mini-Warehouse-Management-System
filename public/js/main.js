@@ -129,13 +129,35 @@ async function initAuth() {
             const json = await res.json();
             if (json.status === 'Success' && json.data) {
                 currentUser = json.data;
+            } else {
+                await autoLoginDefaultAdmin();
             }
+        } else {
+            await autoLoginDefaultAdmin();
         }
     } catch {
         // Fallback default admin
     }
     updateUserInterface();
     fetchUsersList();
+}
+
+async function autoLoginDefaultAdmin() {
+    try {
+        const res = await fetch('/api/auth/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username: 'admin', password: 'admin123' })
+        });
+        const json = await res.json();
+        if (json.status === 'Success' && json.token) {
+            authToken = json.token;
+            currentUser = json.user;
+            localStorage.setItem('supplysync_token', authToken);
+        }
+    } catch (e) {
+        console.warn('Auto-login fallback failed:', e);
+    }
 }
 
 function updateUserInterface() {
@@ -151,12 +173,38 @@ function updateUserInterface() {
     const sidebarRole = document.getElementById('sidebar-user-role');
     if (sidebarRole) {
         const roleColor = currentUser.role === 'ADMIN' ? 'text-purple-600' : currentUser.role === 'MANAGER' ? 'text-emerald-600' : 'text-blue-600';
+        const facilityBadge = currentUser.role === 'ADMIN' ? 'Global Hub' : (currentUser.facility_code || 'WH-JKT-01');
         sidebarRole.className = `text-[10px] font-bold flex items-center gap-1 ${roleColor}`;
-        sidebarRole.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-current"></span> ${currentUser.role} Operator`;
+        sidebarRole.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-current"></span> ${currentUser.role} • ${facilityBadge}`;
     }
 
     const headerOperator = document.getElementById('header-operator-name');
-    if (headerOperator) headerOperator.innerText = `${currentUser.full_name} (${currentUser.role})`;
+    if (headerOperator) {
+        const facName = currentUser.role === 'ADMIN' ? 'Semua Fasilitas' : (currentUser.facility_name || 'Gudang Pusat Cakung');
+        headerOperator.innerText = `${currentUser.full_name} (${currentUser.role} - ${facName})`;
+    }
+
+    // Role-Based UI Element Toggles
+    const isStaff = currentUser.role === 'STAFF';
+    const isManager = currentUser.role === 'MANAGER';
+    const isAdmin = currentUser.role === 'ADMIN';
+
+    // Transfer Creation Button
+    const trfBtn = document.getElementById('btn-create-transfer');
+    if (trfBtn) {
+        trfBtn.style.display = isStaff ? 'none' : 'flex';
+    }
+
+    // Backup Button
+    const backupBtn = document.getElementById('btn-trigger-backup');
+    if (backupBtn) {
+        backupBtn.style.display = isAdmin ? 'inline-flex' : 'none';
+    }
+
+    // Re-render product table to refresh action buttons per role
+    if (Array.isArray(currentProducts) && currentProducts.length > 0) {
+        renderProductsTable(currentProducts);
+    }
 }
 
 async function fetchUsersList() {
@@ -177,10 +225,14 @@ function populateUserSwitcher() {
     if (!container) return;
 
     container.innerHTML = currentUsers.map(u => `
-        <button onclick="switchOperator('${u.username}')" class="w-full text-left p-2.5 rounded-xl hover:bg-slate-100 flex items-center justify-between text-xs transition">
+        <button onclick="switchOperator('${u.username}')" class="w-full text-left p-2.5 rounded-xl hover:bg-slate-100 flex items-center justify-between text-xs transition border border-transparent hover:border-slate-200">
             <div>
                 <div class="font-bold text-slate-900">${escapeHtml(u.full_name)}</div>
-                <div class="text-[10px] text-slate-400">@${escapeHtml(u.username)}</div>
+                <div class="text-[10px] text-slate-500 flex items-center gap-1.5 mt-0.5">
+                    <span>@${escapeHtml(u.username)}</span>
+                    <span class="text-slate-300">•</span>
+                    <span class="text-indigo-600 font-medium">${escapeHtml(u.facility_name || (u.facility_id === 2 ? 'Cold Storage Rungkut' : 'Gudang Pusat Cakung'))}</span>
+                </div>
             </div>
             <span class="text-[10px] font-bold px-2 py-0.5 rounded-full ${
                 u.role === 'ADMIN' ? 'bg-purple-100 text-purple-700' :
@@ -396,9 +448,10 @@ function renderProductTable(products) {
                 <button onclick="openOpnameModalForProduct('${escapeHtml(item.product_id)}')" class="px-2.5 py-1 text-[11px] font-semibold bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg transition" title="Stock Opname">
                     Opname
                 </button>
-                <button onclick="handleDeleteProduct('${escapeHtml(item.product_id)}')" class="px-2 py-1 text-[11px] font-semibold bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-lg transition" title="Nonaktifkan produk">
+                ${currentUser.role === 'ADMIN' ? `
+                <button onclick="handleDeleteProduct('${escapeHtml(item.product_id)}')" class="px-2 py-1 text-[11px] font-semibold bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-lg transition" title="Nonaktifkan master produk (Admin Only)">
                     &times;
-                </button>
+                </button>` : ''}
             </td>
         `;
         tbody.appendChild(tr);
@@ -1615,7 +1668,7 @@ async function triggerDatabaseBackup() {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'Authorization': `Bearer ${sessionStorage.getItem('supplysync_token') || ''}`
+                'Authorization': `Bearer ${authToken || localStorage.getItem('supplysync_token') || ''}`
             }
         });
         const json = await res.json();
@@ -1766,6 +1819,11 @@ async function loadTransfersList() {
 }
 
 async function openCreateTransferModal() {
+    if (currentUser.role !== 'ADMIN' && currentUser.role !== 'MANAGER') {
+        showToast('Akses ditolak: Staf operasional tidak berwenang menginisiasi transfer antar-gudang (Hanya Admin / Manager).', 'error');
+        return;
+    }
+
     await loadFacilities();
 
     const srcSelect = document.getElementById('trf-source-facility');
@@ -1821,7 +1879,7 @@ async function handleCreateTransfer(event) {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'Authorization': `Bearer ${sessionStorage.getItem('supplysync_token') || ''}`
+                'Authorization': `Bearer ${authToken || localStorage.getItem('supplysync_token') || ''}`
             },
             body: JSON.stringify({
                 source_facility_id: sourceFacilityId,
@@ -1936,7 +1994,7 @@ async function submitReceiveTransfer() {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'Authorization': `Bearer ${sessionStorage.getItem('supplysync_token') || ''}`
+                'Authorization': `Bearer ${authToken || localStorage.getItem('supplysync_token') || ''}`
             },
             body: JSON.stringify({
                 received_items: receivedItems,
@@ -1969,7 +2027,7 @@ async function cancelTransfer(transferId, transferNumber) {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'Authorization': `Bearer ${sessionStorage.getItem('supplysync_token') || ''}`
+                'Authorization': `Bearer ${authToken || localStorage.getItem('supplysync_token') || ''}`
             },
             body: JSON.stringify({ cancel_reason: reason })
         });

@@ -10,6 +10,9 @@ exports.addStockBatch = async (req, res, next) => {
         await connection.beginTransaction();
 
         const payload = req.validatedBody || req.body;
+        if (req.user) {
+            payload.user_id = req.user.user_id;
+        }
         const result = await inventoryService.processStockIn(connection, payload);
 
         await connection.commit();
@@ -36,6 +39,9 @@ exports.reduceStockFifo = async (req, res, next) => {
         await connection.beginTransaction();
 
         const payload = req.validatedBody || req.body;
+        if (req.user) {
+            payload.user_id = req.user.user_id;
+        }
         const result = await inventoryService.processStockOutFefo(connection, payload);
 
         await connection.commit();
@@ -62,6 +68,9 @@ exports.adjustStockDisposal = async (req, res, next) => {
         await connection.beginTransaction();
 
         const payload = req.validatedBody || req.body;
+        if (req.user) {
+            payload.user_id = req.user.user_id;
+        }
         const result = await inventoryService.processStockDisposal(connection, payload);
 
         await connection.commit();
@@ -88,6 +97,9 @@ exports.recordStockOpname = async (req, res, next) => {
         await connection.beginTransaction();
 
         const payload = req.validatedBody || req.body;
+        if (req.user) {
+            payload.user_id = req.user.user_id;
+        }
         const result = await inventoryService.processStockOpname(connection, payload);
 
         await connection.commit();

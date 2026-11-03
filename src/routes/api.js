@@ -14,7 +14,7 @@ const facilityController = require('../controllers/facilityController');
 const transferController = require('../controllers/transferController');
 
 const validator = require('../middlewares/validator');
-const { authenticateToken, optionalAuth, authorizeRole } = require('../middlewares/authMiddleware');
+const { authenticateToken, optionalAuth, authorizeRole, requireFacilityScope } = require('../middlewares/authMiddleware');
 
 // 1. Routes Autentikasi & Pengguna (RBAC)
 router.post('/auth/login', authController.login);
@@ -25,56 +25,56 @@ router.get('/auth/users', authController.getAllUsers);
 router.get('/analytics/kpi', analyticsController.getKpiSummary);
 router.get('/reports/stock-card', reportController.getStockCardReport);
 
-// 2. Routes Produk, SKU & Batch Alokasi
+// 3. Routes Master Produk & SKU
 router.get('/products', productController.getAllProducts);
-router.post('/products', optionalAuth, validator.validateProduct, productController.createProduct);
-router.post('/products/import-csv', optionalAuth, productController.importProductsCsv);
-router.put('/products/:id', optionalAuth, productController.updateProduct);
-router.delete('/products/:id', optionalAuth, authorizeRole('ADMIN'), productController.deleteProduct);
+router.post('/products', authenticateToken, authorizeRole('ADMIN', 'MANAGER'), validator.validateProduct, productController.createProduct);
+router.post('/products/import-csv', authenticateToken, authorizeRole('ADMIN', 'MANAGER'), productController.importProductsCsv);
+router.put('/products/:id', authenticateToken, authorizeRole('ADMIN', 'MANAGER'), productController.updateProduct);
+router.delete('/products/:id', authenticateToken, authorizeRole('ADMIN'), productController.deleteProduct);
 router.get('/products/:id/batches', productController.getProductBatches);
 
-// Batch Priorities (FEFO / FIFO)
+// 4. Batch Priorities (FEFO / FIFO)
 router.get('/batches/fifo', productController.getFifoBatches);
 router.get('/batches/fefo', productController.getFifoBatches);
 
-// 3. Routes Mutasi Stok, Alokasi FEFO & Operasional Gudang
-router.post('/stock/in', optionalAuth, validator.validateStockIn, stockController.addStockBatch);
-router.post('/stock/in/import-csv', optionalAuth, stockController.importStockInboundCsv);
-router.post('/stock/out', optionalAuth, validator.validateStockOut, stockController.reduceStockFifo);
-router.post('/stock/disposal', optionalAuth, validator.validateStockDisposal, stockController.adjustStockDisposal);
-router.post('/stock/opname', optionalAuth, validator.validateStockOpname, stockController.recordStockOpname);
+// 5. Routes Mutasi Stok, Alokasi FEFO & Operasional Gudang
+router.post('/stock/in', authenticateToken, authorizeRole('ADMIN', 'MANAGER', 'STAFF'), requireFacilityScope(), validator.validateStockIn, stockController.addStockBatch);
+router.post('/stock/in/import-csv', authenticateToken, authorizeRole('ADMIN', 'MANAGER', 'STAFF'), stockController.importStockInboundCsv);
+router.post('/stock/out', authenticateToken, authorizeRole('ADMIN', 'MANAGER', 'STAFF'), validator.validateStockOut, stockController.reduceStockFifo);
+router.post('/stock/disposal', authenticateToken, authorizeRole('ADMIN', 'MANAGER', 'STAFF'), validator.validateStockDisposal, stockController.adjustStockDisposal);
+router.post('/stock/opname', authenticateToken, authorizeRole('ADMIN', 'MANAGER', 'STAFF'), validator.validateStockOpname, stockController.recordStockOpname);
 router.get('/stock/opname', stockController.getOpnameLogs);
 
-// 4. Routes Audit Trail & Transaksi
+// 6. Routes Audit Trail & Transaksi
 router.get('/transactions', stockController.getTransactionLogs);
 
-// 5. Routes Master Pemasok & Kategori
+// 7. Routes Master Pemasok & Kategori
 router.get('/suppliers', supplierController.getAllSuppliers);
-router.post('/suppliers', optionalAuth, supplierController.createSupplier);
+router.post('/suppliers', authenticateToken, authorizeRole('ADMIN', 'MANAGER'), supplierController.createSupplier);
 
 router.get('/categories', categoryController.getAllCategories);
-router.post('/categories', optionalAuth, categoryController.createCategory);
+router.post('/categories', authenticateToken, authorizeRole('ADMIN', 'MANAGER'), categoryController.createCategory);
 
-// 6. Routes Lokasi Rak / Bin Gudang (Warehouse Locations)
+// 8. Routes Lokasi Rak / Bin Gudang (Warehouse Locations)
 router.get('/locations', locationController.getAllLocations);
-router.post('/locations', optionalAuth, locationController.createLocation);
+router.post('/locations', authenticateToken, authorizeRole('ADMIN', 'MANAGER'), locationController.createLocation);
 
-// 7. Routes Diagnostik Sistem, Verifikasi Integritas & Backup Database
-router.get('/system/health-check', systemController.getHealthAndIntegrity);
-router.get('/system/backups', optionalAuth, systemController.getBackupsList);
-router.post('/system/backup', optionalAuth, systemController.createBackup);
-router.get('/system/backups/:filename', optionalAuth, systemController.downloadBackupFile);
+// 9. Routes Diagnostik Sistem, Verifikasi Integritas & Backup Database
+router.get('/system/health-check', authenticateToken, authorizeRole('ADMIN', 'MANAGER'), systemController.getHealthAndIntegrity);
+router.get('/system/backups', authenticateToken, authorizeRole('ADMIN'), systemController.getBackupsList);
+router.post('/system/backup', authenticateToken, authorizeRole('ADMIN'), systemController.createBackup);
+router.get('/system/backups/:filename', authenticateToken, authorizeRole('ADMIN'), systemController.downloadBackupFile);
 
-// 8. Routes Fasilitas Gudang / Multi-Facility Management
+// 10. Routes Fasilitas Gudang / Multi-Facility Management
 router.get('/facilities', facilityController.getAllFacilities);
-router.post('/facilities', optionalAuth, authorizeRole('ADMIN', 'MANAGER'), facilityController.createFacility);
+router.post('/facilities', authenticateToken, authorizeRole('ADMIN'), facilityController.createFacility);
 router.get('/facilities/:id/locations', facilityController.getFacilityLocations);
 
-// 9. Routes Transfer Stok Antar-Gudang (Inter-Warehouse Transfers)
+// 11. Routes Transfer Stok Antar-Gudang (Inter-Warehouse Transfers)
 router.get('/transfers', transferController.getAllTransfers);
 router.get('/transfers/:id', transferController.getTransferById);
-router.post('/transfers', optionalAuth, authorizeRole('ADMIN', 'MANAGER'), transferController.createTransfer);
-router.post('/transfers/:id/receive', optionalAuth, authorizeRole('ADMIN', 'MANAGER'), transferController.receiveTransfer);
-router.post('/transfers/:id/cancel', optionalAuth, authorizeRole('ADMIN', 'MANAGER'), transferController.cancelTransfer);
+router.post('/transfers', authenticateToken, authorizeRole('ADMIN', 'MANAGER'), transferController.createTransfer);
+router.post('/transfers/:id/receive', authenticateToken, authorizeRole('ADMIN', 'MANAGER'), transferController.receiveTransfer);
+router.post('/transfers/:id/cancel', authenticateToken, authorizeRole('ADMIN', 'MANAGER'), transferController.cancelTransfer);
 
 module.exports = router;

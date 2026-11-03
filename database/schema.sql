@@ -30,7 +30,25 @@ DROP TABLE IF EXISTS `users`;
 SET foreign_key_checks = 1;
 
 -- --------------------------------------------------------------------
--- 1. TABEL PENGGUNA & RBAC (users)
+-- 1. TABEL FASILITAS GUDANG / CABANG (warehouse_facilities)
+-- --------------------------------------------------------------------
+CREATE TABLE `warehouse_facilities` (
+    `facility_id` INT AUTO_INCREMENT PRIMARY KEY,
+    `facility_code` VARCHAR(50) NOT NULL UNIQUE,
+    `facility_name` VARCHAR(150) NOT NULL,
+    `facility_type` ENUM('CENTRAL_HUB', 'COLD_STORAGE', 'REGIONAL_DC', 'RETAIL_BUFFER') NOT NULL DEFAULT 'REGIONAL_DC',
+    `address` TEXT DEFAULT NULL,
+    `city` VARCHAR(100) NOT NULL DEFAULT 'Jakarta',
+    `contact_number` VARCHAR(50) DEFAULT NULL,
+    `is_active` BOOLEAN NOT NULL DEFAULT TRUE,
+    `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX `idx_facility_code` (`facility_code`),
+    INDEX `idx_facility_type` (`facility_type`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------------------
+-- 2. TABEL PENGGUNA & RBAC DENGAN FACILITY SCOPING (users)
 -- --------------------------------------------------------------------
 CREATE TABLE `users` (
     `user_id` INT AUTO_INCREMENT PRIMARY KEY,
@@ -38,10 +56,16 @@ CREATE TABLE `users` (
     `password_hash` VARCHAR(255) NOT NULL,
     `full_name` VARCHAR(100) NOT NULL,
     `role` ENUM('ADMIN', 'MANAGER', 'STAFF') NOT NULL DEFAULT 'STAFF',
+    `facility_id` INT NOT NULL DEFAULT 1,
     `is_active` BOOLEAN NOT NULL DEFAULT TRUE,
     `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT `fk_users_facility` FOREIGN KEY (`facility_id`)
+        REFERENCES `warehouse_facilities` (`facility_id`)
+        ON UPDATE CASCADE
+        ON DELETE RESTRICT,
     INDEX `idx_users_role` (`role`),
+    INDEX `idx_users_facility` (`facility_id`),
     INDEX `idx_users_username` (`username`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -71,23 +95,7 @@ CREATE TABLE `suppliers` (
     INDEX `idx_supplier_code` (`supplier_code`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- --------------------------------------------------------------------
--- 4. TABEL FASILITAS GUDANG / CABANG (warehouse_facilities)
--- --------------------------------------------------------------------
-CREATE TABLE `warehouse_facilities` (
-    `facility_id` INT AUTO_INCREMENT PRIMARY KEY,
-    `facility_code` VARCHAR(50) NOT NULL UNIQUE,
-    `facility_name` VARCHAR(150) NOT NULL,
-    `facility_type` ENUM('CENTRAL_HUB', 'COLD_STORAGE', 'REGIONAL_DC', 'RETAIL_BUFFER') NOT NULL DEFAULT 'REGIONAL_DC',
-    `address` TEXT DEFAULT NULL,
-    `city` VARCHAR(100) NOT NULL DEFAULT 'Jakarta',
-    `contact_number` VARCHAR(50) DEFAULT NULL,
-    `is_active` BOOLEAN NOT NULL DEFAULT TRUE,
-    `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    INDEX `idx_facility_code` (`facility_code`),
-    INDEX `idx_facility_type` (`facility_type`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 
 -- --------------------------------------------------------------------
 -- 5. TABEL LOKASI RAK / BIN GUDANG (warehouse_locations)
@@ -317,13 +325,20 @@ CREATE TABLE `stock_opname` (
 -- SEED DATA INITIAL
 -- ====================================================================
 
--- 1. Seed Users (Default admin, manager, staff)
-INSERT INTO `users` (`user_id`, `username`, `password_hash`, `full_name`, `role`) VALUES
-(1, 'admin', 'scrypt$a1b2c3d4e5f60718$3f5a2b1c8d9e0f', 'Choqy Pananda', 'ADMIN'),
-(2, 'manager', 'scrypt$a1b2c3d4e5f60718$3f5a2b1c8d9e0f', 'Siti Rahmawati', 'MANAGER'),
-(3, 'staff', 'scrypt$a1b2c3d4e5f60718$3f5a2b1c8d9e0f', 'Budi Santoso', 'STAFF');
+-- 1. Seed Warehouse Facilities
+INSERT INTO `warehouse_facilities` (`facility_id`, `facility_code`, `facility_name`, `facility_type`, `address`, `city`, `contact_number`) VALUES
+(1, 'WH-JKT-01', 'Gudang Pusat Cakung', 'CENTRAL_HUB', 'Kawasan Industri Pulogadung & Cakung', 'Jakarta Timur', '021-4601234'),
+(2, 'WH-SBY-01', 'Cold Storage Rungkut', 'COLD_STORAGE', 'Kawasan Industri SIER Rungkut', 'Surabaya', '031-8431234'),
+(3, 'WH-MDN-01', 'Regional DC Belawan', 'REGIONAL_DC', 'Kawasan Industri Medan (KIM) II', 'Medan', '061-6851234');
 
--- 2. Seed Categories
+-- 2. Seed Users (Default admin, manager, staff Cakung, staff Surabaya)
+INSERT INTO `users` (`user_id`, `username`, `password_hash`, `full_name`, `role`, `facility_id`) VALUES
+(1, 'admin', 'scrypt$a1b2c3d4e5f60718$3f5a2b1c8d9e0f', 'Choqy Pananda', 'ADMIN', 1),
+(2, 'manager', 'scrypt$a1b2c3d4e5f60718$3f5a2b1c8d9e0f', 'Siti Rahmawati', 'MANAGER', 1),
+(3, 'staff', 'scrypt$a1b2c3d4e5f60718$3f5a2b1c8d9e0f', 'Budi Santoso', 'STAFF', 1),
+(4, 'staff_sby', 'scrypt$a1b2c3d4e5f60718$3f5a2b1c8d9e0f', 'Surya Pratama', 'STAFF', 2);
+
+-- 3. Seed Categories
 INSERT INTO `categories` (`category_id`, `category_name`, `description`) VALUES
 (1, 'Sembako & Pangan', 'Bahan pangan pokok kebutuhan rumah tangga dan industri makanan'),
 (2, 'Pakan Ternak (Feed)', 'Pakan formula unggas starter, grower, dan finisher'),
@@ -336,11 +351,7 @@ INSERT INTO `suppliers` (`supplier_id`, `supplier_code`, `supplier_name`, `conta
 (2, 'SUP-002', 'PT Salim Ivomas Pratama', 'Dewi Lestari', '0813-9876-5432', 'dewi@salimivomas.com', 'Jl. Tanjung Morawa Km 12'),
 (3, 'SUP-003', 'CV Berkah Unggas Nusantara', 'Rahmat Hidayat', '0852-1122-3344', 'rahmat@unggasnusantara.com', 'Deli Serdang, Sumatera Utara');
 
--- 4. Seed Warehouse Facilities
-INSERT INTO `warehouse_facilities` (`facility_id`, `facility_code`, `facility_name`, `facility_type`, `address`, `city`, `contact_number`) VALUES
-(1, 'WH-JKT-01', 'Gudang Pusat Cakung', 'CENTRAL_HUB', 'Kawasan Industri Pulogadung & Cakung', 'Jakarta Timur', '021-4601234'),
-(2, 'WH-SBY-01', 'Cold Storage Rungkut', 'COLD_STORAGE', 'Kawasan Industri SIER Rungkut', 'Surabaya', '031-8431234'),
-(3, 'WH-MDN-01', 'Regional DC Belawan', 'REGIONAL_DC', 'Kawasan Industri Medan (KIM) II', 'Medan', '061-6851234');
+
 
 -- 5. Seed Warehouse Locations (Ditautkan ke Fasilitas Gudang)
 INSERT INTO `warehouse_locations` (`location_id`, `facility_id`, `location_code`, `zone_name`, `aisle`, `rack`, `tier`, `bin`, `description`) VALUES

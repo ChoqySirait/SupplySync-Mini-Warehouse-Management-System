@@ -2,6 +2,9 @@ const { test, describe } = require('node:test');
 const assert = require('node:assert/strict');
 const { EventEmitter } = require('node:events');
 const app = require('../app');
+const { generateToken } = require('../src/utils/security');
+
+const adminToken = generateToken({ user_id: 1, username: 'admin', role: 'ADMIN', facility_id: 1 });
 
 function createMockRequestResponse({ method = 'GET', url = '/', body = {}, headers = {} }) {
     const req = new EventEmitter();
@@ -91,6 +94,7 @@ describe('Express In-Memory Routing & Security Tests (Zero Network Sockets)', ()
         const { req, res, getStatusCode, getBody } = createMockRequestResponse({
             method: 'POST',
             url: '/api/products',
+            headers: { authorization: `Bearer ${adminToken}` },
             body: { product_id: '', product_name: '' }
         });
 
@@ -108,6 +112,7 @@ describe('Express In-Memory Routing & Security Tests (Zero Network Sockets)', ()
         const { req, res, getStatusCode, getBody } = createMockRequestResponse({
             method: 'POST',
             url: '/api/stock/in',
+            headers: { authorization: `Bearer ${adminToken}` },
             body: { product_id: 'PRD-01', quantity: -10, expired_date: '2026-12-31' }
         });
 
@@ -125,7 +130,8 @@ describe('Express In-Memory Routing & Security Tests (Zero Network Sockets)', ()
     test('5. Endpoint GET /api/system/backups merespons dengan daftar berkas', (t, done) => {
         const { req, res, getStatusCode, getBody } = createMockRequestResponse({
             method: 'GET',
-            url: '/api/system/backups'
+            url: '/api/system/backups',
+            headers: { authorization: `Bearer ${adminToken}` }
         });
 
         res.on('finish', () => {
@@ -133,6 +139,24 @@ describe('Express In-Memory Routing & Security Tests (Zero Network Sockets)', ()
             const body = getBody();
             assert.strictEqual(body.status, 'Success');
             assert.ok(Array.isArray(body.data.backups));
+            done();
+        });
+
+        app.handle(req, res);
+    });
+
+    test('6. Akses mutasi tanpa token autentikasi ditolak status 401', (t, done) => {
+        const { req, res, getStatusCode, getBody } = createMockRequestResponse({
+            method: 'POST',
+            url: '/api/products',
+            body: { product_id: 'PRD-TEST', product_name: 'Test Product' }
+        });
+
+        res.on('finish', () => {
+            assert.strictEqual(getStatusCode(), 401);
+            const body = getBody();
+            assert.strictEqual(body.status, 'Error');
+            assert.match(body.message, /token/i);
             done();
         });
 
