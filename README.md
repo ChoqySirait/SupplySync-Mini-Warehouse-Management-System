@@ -7,7 +7,7 @@
 ![MySQL](https://img.shields.io/badge/MySQL-v8.0%20InnoDB-blue?style=for-the-badge&logo=mysql)
 ![TailwindCSS](https://img.shields.io/badge/TailwindCSS-v3-38B2AC?style=for-the-badge&logo=tailwind-css)
 ![Chart.js](https://img.shields.io/badge/Chart.js-v4-FF6384?style=for-the-badge&logo=chart.js)
-![Testing](https://img.shields.io/badge/Tests-28%20Passed-success?style=for-the-badge)
+![Testing](https://img.shields.io/badge/Tests-39%20Passed-success?style=for-the-badge)
 ![License](https://img.shields.io/badge/License-MIT-yellow?style=for-the-badge)
 
 ---
@@ -29,9 +29,11 @@ Di industri pergudangan modern, rantai dingin (*cold chain*), dan agribisnis ter
 | Fitur Utama | Fungsi & Deskripsi Teknis | Nilai Bisnis / Dampak |
 |---|---|---|
 | **Auto-FEFO Outflow Engine** | Mengurangi stok otomatis dari batch dengan tanggal kedaluwarsa paling dekat menggunakan transaksi atomik MySQL dan penguncian baris (`FOR UPDATE`). Mendukung tiebreaker penerimaan (*received_date*) dan perlindungan terhadap batch kedaluwarsa. | Mencegah kerugian barang busuk/kedaluwarsa di gudang (*zero expired waste*). |
+| **Warehouse Bin/Rack Location & Picking Slip** | Setiap batch ditempatkan pada koordinat fisik gudang (*Zone, Aisle, Rack, Tier, Bin*). Saat barang keluar, sistem menerbitkan **Digital Picking Route Slip** yang dapat dicetak langsung. | Mempercepat waktu pemetikan barang (*picking speed*) dan mencegah salah ambil lokasi. |
+| **Autentikasi & RBAC (Role-Based Access Control)** | Sistem login berbasis token JWT (HMAC-SHA256) dengan pembagian peran (`ADMIN`, `MANAGER`, `STAFF`) dan hashing kata sandi aman (`crypto.scrypt`). | Menjamin kontrol akses terotorisasi dan akuntabilitas operator pada audit trail. |
 | **Batch Traceability Per-Item** | Rincian pemotongan batch dicatat di tabel relasi `stock_transaction_items`, sehingga mutasi 100 unit yang memotong 3 batch berbeda tetap terlacak secara presisi. | Transparansi audit alur fisik barang dari penerimaan hingga pengiriman. |
 | **Master Inventaris & Batch Breakdown** | Katalog SKU lengkap dengan indikator ambang batas aman (*Safe*, *Low Stock*, *Out of Stock*), filter kategori, pencarian real-time, dan modal rincian sub-batch per produk. | Memberikan visibilitas menyeluruh terhadap komposisi stok aktif. |
-| **Multi-Batch Stock Inbound** | Pencatatan penerimaan barang fleksibel dengan kode batch, kuantitas, tanggal kedaluwarsa, dan identitas pemasok (*supplier*). | Menjamin akurasi histori kedatangan barang dari berbagai vendor. |
+| **Multi-Batch Stock Inbound** | Pencatatan penerimaan barang fleksibel dengan kode batch, kuantitas, tanggal kedaluwarsa, pemilihan lokasi rak, dan identitas pemasok (*supplier*). | Menjamin akurasi histori kedatangan barang dari berbagai vendor. |
 | **Modul Stock Disposal (Afkir)** | Pengeluaran barang rusak/kedaluwarsa dari stok aktif disertai alasan resmi (misal: kemasan bocor, lewat tanggal edar). | Memisahkan barang tidak layak jual dari inventaris komersial. |
 | **Rekonsiliasi Stock Opname** | Modul pencatatan audit fisik gudang, menghitung deviasi surplus/defisit, dan mencatat transaksi tipe `ADJUSTMENT` secara otomatis. | Menjaga konsistensi data sistem dengan kondisi fisik rak gudang. |
 | **Visual Analytics (Chart.js)** | Grafik perbandingan akumulasi volume barang masuk (*Inbound*) vs volume barang keluar (*FEFO Outflow / Disposal*). | Analisis tren pergantian stok (*inventory turnover*). |
@@ -244,43 +246,54 @@ Jalankan test suite:
 npm test
 ```
 
-### Cakupan Pengujian (28 Tests):
+### Cakupan Pengujian (39 Tests):
+- **Keamanan & Autentikasi JWT / scrypt (5 tests)**: Password hashing NIST-compliant, verifikasi akun demo, penandatanganan HMAC-SHA256, deteksi tamper, verifikasi masa kedaluwarsa.
+- **Middleware Autentikasi & RBAC (4 tests)**: Validasi Bearer token, penolakan token absen/invalid, otorisasi role ADMIN vs STAFF.
 - **Logika FEFO Engine (8 tests)**: Single batch partial deduction, exact match, multi-batch depletion, tiebreaker FIFO, tiebreaker ID, insufficient stock, penanganan batch 0, edge cases.
-- **Middleware Input Validator (12 tests)**: Validasi SKU, nama produk, batas stok minimum, validasi bilangan bulat positif, format tanggal ISO, alasan afkir, stock opname.
+- **Alokasi Lokasi Rak & Rute Petik / Picking Slip (2 tests)**: Penentuan koordinat rak lorong dan alokasi multi-lokasi.
 - **Generator Nomor Referensi (4 tests)**: Pola referensi unik transaksi `TRX-IN-...`, `TRX-OUT-...`, `TRX-DISP-...`.
+- **Middleware Input Validator (12 tests)**: Validasi SKU, nama produk, batas stok minimum, validasi bilangan bulat positif, format tanggal ISO, alasan afkir, stock opname.
 - **Integrasi Express & Keamanan (4 tests)**: Pemeriksaan header keamanan (`X-Content-Type-Options`, `X-Frame-Options`, `X-XSS-Protection`), response JSON 404, dan penolakan payload tidak valid.
 
 Hasil eksekusi:
 ```text
 ✔ Express In-Memory Routing & Security Tests (4 pass)
+✔ Auth Middleware & RBAC Tests (4 pass)
 ✔ FEFO Engine Allocation Logic (8 pass)
+✔ Warehouse Bin Location & Picking Route Allocation Tests (2 pass)
 ✔ WMS Reference Number Generator Tests (4 pass)
+✔ Security Utilities: Password Hashing & JWT (5 pass)
 ✔ Middleware Input Validator Tests (12 pass)
-ℹ tests 28 | suites 9 | pass 28 | fail 0
+ℹ tests 39 | suites 12 | pass 39 | fail 0
 ```
 
 ---
 
 ## 🔌 Dokumentasi REST API
 
-| Method | Endpoint | Deskripsi | Status Sukses |
+| Method | Endpoint | Deskripsi | Otorisasi / Role |
 |---|---|---|:---:|
-| `GET` | `/api/products` | Ambil semua produk, total stok, dan status ambang batas | `200 OK` |
-| `POST` | `/api/products` | Daftarkan master SKU baru | `201 Created` |
-| `PUT` | `/api/products/:id` | Perbarui data produk | `200 OK` |
-| `DELETE` | `/api/products/:id` | Nonaktifkan produk (hanya jika total stok 0) | `200 OK` |
-| `GET` | `/api/products/:id/batches` | Ambil rincian seluruh batch aktif milik produk | `200 OK` |
-| `GET` | `/api/batches/fefo` | Ambil batch terurut FEFO (paling dekat kedaluwarsa) | `200 OK` |
-| `POST` | `/api/stock/in` | Penerimaan barang masuk (*Inbound*) | `201 Created` |
-| `POST` | `/api/stock/out` | Pengeluaran barang otomatis FEFO (*Outflow*) | `200 OK` |
-| `POST` | `/api/stock/disposal` | Pembuangan barang afkir/rusak/kedaluwarsa | `200 OK` |
-| `POST` | `/api/stock/opname` | Eksekusi rekonsiliasi stock opname fisik | `200 OK` |
-| `GET` | `/api/stock/opname` | Ambil riwayat audit stock opname | `200 OK` |
-| `GET` | `/api/transactions` | Ambil riwayat audit trail (filter tipe & pagination) | `200 OK` |
-| `GET` | `/api/categories` | Ambil daftar kategori produk | `200 OK` |
-| `POST` | `/api/categories` | Tambah kategori produk baru | `201 Created` |
-| `GET` | `/api/suppliers` | Ambil daftar pemasok aktif | `200 OK` |
-| `POST` | `/api/suppliers` | Daftarkan pemasok baru | `201 Created` |
+| `POST` | `/api/auth/login` | Login operator dan terbitkan JWT Token (24 jam) | Public |
+| `GET` | `/api/auth/me` | Ambil profil operator aktif dari Bearer Token | Authenticated |
+| `GET` | `/api/auth/users` | Ambil daftar pengguna & operator gudang | Public / Admin |
+| `GET` | `/api/products` | Ambil semua produk, total stok, dan status ambang batas | Public |
+| `POST` | `/api/products` | Daftarkan master SKU baru | Authenticated |
+| `PUT` | `/api/products/:id` | Perbarui data produk | Authenticated |
+| `DELETE` | `/api/products/:id` | Nonaktifkan produk (hanya jika total stok 0) | `ADMIN` Only |
+| `GET` | `/api/products/:id/batches` | Ambil rincian batch aktif dan lokasi rak per SKU | Public |
+| `GET` | `/api/batches/fefo` | Ambil batch terurut FEFO (paling dekat kedaluwarsa) | Public |
+| `POST` | `/api/stock/in` | Penerimaan barang masuk (*Inbound*) beserta lokasi rak | Authenticated |
+| `POST` | `/api/stock/out` | Pengeluaran otomatis FEFO & penerbitan Picking Slip | Authenticated |
+| `POST` | `/api/stock/disposal` | Pembuangan barang afkir/rusak/kedaluwarsa | Authenticated |
+| `POST` | `/api/stock/opname` | Eksekusi rekonsiliasi stock opname fisik | Authenticated |
+| `GET` | `/api/stock/opname` | Ambil riwayat audit stock opname | Public |
+| `GET` | `/api/transactions` | Ambil riwayat audit trail (filter tipe & pagination) | Public |
+| `GET` | `/api/locations` | Ambil seluruh lokasi rak dan kapasitas bin gudang | Public |
+| `POST` | `/api/locations` | Tambah lokasi rak/bin gudang baru | Authenticated |
+| `GET` | `/api/categories` | Ambil daftar kategori produk | Public |
+| `POST` | `/api/categories` | Tambah kategori produk baru | Authenticated |
+| `GET` | `/api/suppliers` | Ambil daftar pemasok aktif | Public |
+| `POST` | `/api/suppliers` | Daftarkan pemasok baru | Authenticated |
 
 ---
 

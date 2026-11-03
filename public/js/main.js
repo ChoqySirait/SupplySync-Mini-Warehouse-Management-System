@@ -1,6 +1,6 @@
 /**
  * SupplySync WMS - Main Client Application Logic
- * Enterprise Single Page Application (SPA) Controller
+ * Enterprise Single Page Application (SPA) Controller with RBAC & Picking Slip
  */
 
 // Application State
@@ -9,7 +9,18 @@ let currentTransactionLogs = [];
 let currentOpnameLogs = [];
 let currentCategories = [];
 let currentSuppliers = [];
+let currentLocations = [];
+let currentUsers = [];
 let chartInstance = null;
+
+// Auth State
+let currentUser = {
+    user_id: 1,
+    username: 'admin',
+    role: 'ADMIN',
+    full_name: 'Choqy Pananda'
+};
+let authToken = localStorage.getItem('supplysync_token') || '';
 
 // HTML Escaping Utility untuk mencegah kerentanan XSS
 function escapeHtml(str) {
@@ -23,7 +34,7 @@ function escapeHtml(str) {
 }
 
 // --------------------------------------------------------------------
-// 1. TOAST NOTIFICATION SYSTEM (Pengganti alert() browser)
+// 1. TOAST NOTIFICATION SYSTEM
 // --------------------------------------------------------------------
 function showToast(message, type = 'success') {
     const container = document.getElementById('toast-container');
@@ -79,11 +90,11 @@ function switchTab(tabName) {
         inventory: 'Master Inventaris & Rincian Batch SKU',
         movements: 'Pusat Transaksi & Mutasi Stok (FEFO)',
         opname: 'Rekonsiliasi Stock Opname Fisik',
+        locations: 'Peta Lokasi Rak & Bin Gudang',
         audit: 'Audit Trail Transaksi Real-time'
     };
     document.getElementById('page-title').innerText = titles[tabName] || 'SupplySync Enterprise WMS';
 
-    // Tutup mobile drawer jika aktif
     closeMobileSidebar();
 }
 
@@ -100,13 +111,116 @@ function closeMobileSidebar() {
 }
 
 // --------------------------------------------------------------------
-// 3. DATA FETCHING & SYNCHRONIZATION
+// 3. AUTHENTICATION & OPERATOR SWITCHER (RBAC)
+// --------------------------------------------------------------------
+async function initAuth() {
+    try {
+        const savedToken = localStorage.getItem('supplysync_token');
+        if (savedToken) {
+            authToken = savedToken;
+            const res = await fetch('/api/auth/me', {
+                headers: { 'Authorization': `Bearer ${authToken}` }
+            });
+            const json = await res.json();
+            if (json.status === 'Success' && json.data) {
+                currentUser = json.data;
+            }
+        }
+    } catch {
+        // Fallback default admin
+    }
+    updateUserInterface();
+    fetchUsersList();
+}
+
+function updateUserInterface() {
+    // Header & Sidebar Avatar Info
+    const initials = (currentUser.full_name || 'CP').split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
+    
+    const sidebarAvatar = document.getElementById('sidebar-user-avatar');
+    if (sidebarAvatar) sidebarAvatar.innerText = initials;
+
+    const sidebarName = document.getElementById('sidebar-user-name');
+    if (sidebarName) sidebarName.innerText = currentUser.full_name;
+
+    const sidebarRole = document.getElementById('sidebar-user-role');
+    if (sidebarRole) {
+        const roleColor = currentUser.role === 'ADMIN' ? 'text-purple-600' : currentUser.role === 'MANAGER' ? 'text-emerald-600' : 'text-blue-600';
+        sidebarRole.className = `text-[10px] font-bold flex items-center gap-1 ${roleColor}`;
+        sidebarRole.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-current"></span> ${currentUser.role} Operator`;
+    }
+
+    const headerOperator = document.getElementById('header-operator-name');
+    if (headerOperator) headerOperator.innerText = `${currentUser.full_name} (${currentUser.role})`;
+}
+
+async function fetchUsersList() {
+    try {
+        const res = await fetch('/api/auth/users');
+        const json = await res.json();
+        if (json.status === 'Success') {
+            currentUsers = json.data || [];
+            populateUserSwitcher();
+        }
+    } catch (e) {
+        console.warn('Gagal memuat daftar pengguna:', e);
+    }
+}
+
+function populateUserSwitcher() {
+    const container = document.getElementById('user-switch-options');
+    if (!container) return;
+
+    container.innerHTML = currentUsers.map(u => `
+        <button onclick="switchOperator('${u.username}')" class="w-full text-left p-2.5 rounded-xl hover:bg-slate-100 flex items-center justify-between text-xs transition">
+            <div>
+                <div class="font-bold text-slate-900">${escapeHtml(u.full_name)}</div>
+                <div class="text-[10px] text-slate-400">@${escapeHtml(u.username)}</div>
+            </div>
+            <span class="text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                u.role === 'ADMIN' ? 'bg-purple-100 text-purple-700' :
+                u.role === 'MANAGER' ? 'bg-emerald-100 text-emerald-700' :
+                'bg-blue-100 text-blue-700'
+            }">${u.role}</span>
+        </button>
+    `).join('');
+}
+
+async function switchOperator(username) {
+    try {
+        const defaultPassword = username + '123';
+        const res = await fetch('/api/auth/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, password: defaultPassword })
+        });
+        const json = await res.json();
+
+        if (json.status === 'Success' && json.token) {
+            authToken = json.token;
+            currentUser = json.user;
+            localStorage.setItem('supplysync_token', authToken);
+            updateUserInterface();
+            closeModal('modal-switch-user');
+            showToast(`Beralih operator aktif: ${currentUser.full_name} (${currentUser.role})`, 'success');
+        } else {
+            showToast('Gagal beralih operator: ' + json.message, 'error');
+        }
+    } catch (err) {
+        showToast('Kesalahan jaringan saat login: ' + err.message, 'error');
+    }
+}
+
+// --------------------------------------------------------------------
+// 4. DATA FETCHING & SYNCHRONIZATION
 // --------------------------------------------------------------------
 async function loadDashboardData() {
     try {
         await Promise.all([
+            initAuth(),
             fetchCategories(),
             fetchSuppliers(),
+            fetchLocations(),
             fetchProducts(),
             fetchFifoBatches(),
             loadTransactionLogs(),
@@ -144,6 +258,20 @@ async function fetchSuppliers() {
     }
 }
 
+async function fetchLocations() {
+    try {
+        const res = await fetch('/api/locations');
+        const json = await res.json();
+        if (json.status === 'Success') {
+            currentLocations = json.data || [];
+            renderLocationsGrid(currentLocations);
+            populateLocationDropdowns();
+        }
+    } catch (e) {
+        console.warn('Gagal memuat lokasi rak gudang:', e);
+    }
+}
+
 async function fetchProducts() {
     try {
         const res = await fetch('/api/products');
@@ -171,7 +299,7 @@ async function fetchFifoBatches() {
                 : `${days} Hari lagi Expired`;
 
             document.getElementById('stat-fifo-priority').innerText = topFefo.product_name;
-            document.getElementById('stat-fifo-sub').innerText = `${topFefo.batch_code || '#' + topFefo.batch_id} — ${expBadge}`;
+            document.getElementById('stat-fifo-sub').innerText = `${topFefo.batch_code || '#' + topFefo.batch_id} (${topFefo.location_code || 'A-01-01'}) — ${expBadge}`;
         } else {
             document.getElementById('stat-fifo-priority').innerText = 'Stok Bersih';
             document.getElementById('stat-fifo-sub').innerText = 'Tidak ada batch mendekati kedaluwarsa';
@@ -182,7 +310,7 @@ async function fetchFifoBatches() {
 }
 
 // --------------------------------------------------------------------
-// 4. RENDERING TABEL & KOMPONEN UI
+// 5. RENDERING TABEL & LOKASI GUDANG
 // --------------------------------------------------------------------
 function renderProductTable(products) {
     const tbody = document.getElementById('product-table-body');
@@ -210,14 +338,14 @@ function renderProductTable(products) {
             <td class="p-4 font-mono font-bold text-blue-700">${escapeHtml(item.product_id)}</td>
             <td class="p-4">
                 <div class="font-bold text-slate-900">${escapeHtml(item.product_name)}</div>
-                <div class="text-[11px] text-slate-400">${item.active_batches || 0} batch aktif</div>
+                <div class="text-[11px] text-slate-400">${item.active_batches || 0} batch aktif di rak</div>
             </td>
             <td class="p-4 text-slate-600">${escapeHtml(item.category)}</td>
             <td class="p-4 font-bold text-right ${item.stock_status === 'Low Stock' ? 'text-amber-600' : item.stock_status === 'Out of Stock' ? 'text-rose-600' : 'text-slate-900'}">${item.total_stock}</td>
             <td class="p-4 text-slate-500">${escapeHtml(item.unit)}</td>
             <td class="p-4">${statusBadge}</td>
             <td class="p-4 text-right space-x-1">
-                <button onclick="showBatchDetails('${escapeHtml(item.product_id)}')" class="px-2.5 py-1 text-[11px] font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg transition" title="Lihat rincian batch">
+                <button onclick="showBatchDetails('${escapeHtml(item.product_id)}')" class="px-2.5 py-1 text-[11px] font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg transition" title="Lihat rincian batch & lokasi rak">
                     Batch
                 </button>
                 <button onclick="openOpnameModalForProduct('${escapeHtml(item.product_id)}')" class="px-2.5 py-1 text-[11px] font-semibold bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg transition" title="Stock Opname">
@@ -232,15 +360,47 @@ function renderProductTable(products) {
     });
 }
 
+function renderLocationsGrid(locations) {
+    const container = document.getElementById('locations-grid-container');
+    if (!container) return;
+    container.innerHTML = '';
+
+    if (!locations || locations.length === 0) {
+        container.innerHTML = `<div class="p-8 text-center text-slate-400 col-span-3">Belum ada lokasi rak terdaftar.</div>`;
+        return;
+    }
+
+    locations.forEach(loc => {
+        const card = document.createElement('div');
+        card.className = 'card-enterprise p-5 rounded-2xl flex flex-col justify-between space-y-3 hover:border-blue-300 transition';
+        card.innerHTML = `
+            <div>
+                <div class="flex items-center justify-between mb-2">
+                    <span class="font-mono font-black text-sm px-2.5 py-1 rounded-lg bg-blue-50 text-blue-700 border border-blue-200">${escapeHtml(loc.location_code)}</span>
+                    <span class="text-[11px] font-bold text-slate-500">${loc.batch_count || 0} Batch</span>
+                </div>
+                <h4 class="font-bold text-sm text-slate-900">${escapeHtml(loc.zone_name)}</h4>
+                <p class="text-xs text-slate-500 mt-1">${escapeHtml(loc.aisle)} &bull; ${escapeHtml(loc.rack)} &bull; ${escapeHtml(loc.tier)} &bull; ${escapeHtml(loc.bin)}</p>
+                <p class="text-[11px] text-slate-400 italic mt-1">${escapeHtml(loc.description || 'Penyimpanan terstandar')}</p>
+            </div>
+            <div class="pt-3 border-t border-slate-100 flex items-center justify-between text-xs">
+                <span class="text-slate-500 font-medium">Total Stok di Bin:</span>
+                <span class="font-bold text-slate-900">${loc.total_stock || 0} Unit</span>
+            </div>
+        `;
+        container.appendChild(card);
+    });
+}
+
 // --------------------------------------------------------------------
-// 5. MODAL RINCIAN BATCH PER SKU
+// 6. MODAL RINCIAN BATCH PER SKU DENGAN LOKASI RAK
 // --------------------------------------------------------------------
 async function showBatchDetails(productId) {
     try {
         const res = await fetch(`/api/products/${productId}/batches`);
         const json = await res.json();
         const tbody = document.getElementById('batch-detail-body');
-        document.getElementById('batch-detail-title').innerText = `Rincian Batch Aktif: SKU ${productId}`;
+        document.getElementById('batch-detail-title').innerText = `Rincian Batch Aktif & Lokasi Rak: SKU ${productId}`;
         tbody.innerHTML = '';
 
         if (json.status === 'Success' && json.data && json.data.length > 0) {
@@ -253,8 +413,11 @@ async function showBatchDetails(productId) {
                 tr.className = 'border-b border-slate-100 text-xs hover:bg-slate-50';
                 tr.innerHTML = `
                     <td class="p-3 font-mono font-semibold">${escapeHtml(b.batch_code || '#' + b.batch_id)}</td>
-                    <td class="p-3 text-slate-600">${escapeHtml(b.supplier_name || 'Pasokan Umum')}</td>
-                    <td class="p-3 text-slate-500">${b.received_date ? b.received_date.split('T')[0] : '-'}</td>
+                    <td class="p-3">
+                        <span class="font-mono font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">${escapeHtml(b.location_code || 'A-01-01')}</span>
+                        <div class="text-[10px] text-slate-400 mt-0.5">${escapeHtml(b.aisle || '')} > ${escapeHtml(b.rack || '')}</div>
+                    </td>
+                    <td class="p-3 text-slate-600">${escapeHtml(b.supplier_name || 'Pasokan Internal')}</td>
                     <td class="p-3 ${expiryClass}">
                         ${b.expired_date ? b.expired_date.split('T')[0] : '-'} 
                         <span class="text-[10px] block font-normal text-slate-400">(${b.days_until_expiration} hari lagi)</span>
@@ -274,7 +437,7 @@ async function showBatchDetails(productId) {
 }
 
 // --------------------------------------------------------------------
-// 6. RENDER AUDIT LOG & VISUAL ANALYTICS (CHART.JS)
+// 7. RENDER AUDIT LOG & VISUAL ANALYTICS
 // --------------------------------------------------------------------
 async function loadTransactionLogs() {
     try {
@@ -343,9 +506,6 @@ async function loadTransactionLogs() {
     }
 }
 
-// --------------------------------------------------------------------
-// 7. RENDER REKONSILIASI STOCK OPNAME LOGS
-// --------------------------------------------------------------------
 async function loadOpnameLogs() {
     try {
         const res = await fetch('/api/stock/opname');
@@ -391,9 +551,6 @@ async function loadOpnameLogs() {
     }
 }
 
-// --------------------------------------------------------------------
-// 8. RENDER GRAFIK ANALYTICS (CHART.JS)
-// --------------------------------------------------------------------
 function renderAnalyticsChart(logs) {
     const ctx = document.getElementById('stockMovementChart');
     if (!ctx) return;
@@ -463,7 +620,7 @@ function renderAnalyticsChart(logs) {
 }
 
 // --------------------------------------------------------------------
-// 9. FORM SUBMISSION HANDLERS
+// 8. FORM SUBMISSION HANDLERS
 // --------------------------------------------------------------------
 async function handleAddProduct(e) {
     e.preventDefault();
@@ -479,7 +636,10 @@ async function handleAddProduct(e) {
     try {
         const res = await fetch('/api/products', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${authToken}`
+            },
             body: JSON.stringify(payload)
         });
         const result = await res.json();
@@ -510,14 +670,19 @@ async function handleStockIn(e) {
         quantity: parseInt(document.getElementById('in-quantity').value, 10),
         expired_date: document.getElementById('in-expired-date').value,
         supplier_id: document.getElementById('in-supplier-id')?.value || null,
+        location_id: document.getElementById('in-location-id')?.value || null,
         batch_code: document.getElementById('in-batch-code')?.value || '',
-        notes: document.getElementById('in-notes').value
+        notes: document.getElementById('in-notes').value,
+        user_id: currentUser.user_id
     };
 
     try {
         const res = await fetch('/api/stock/in', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${authToken}`
+            },
             body: JSON.stringify(payload)
         });
         const result = await res.json();
@@ -547,28 +712,61 @@ async function handleStockOut(e) {
         product_id: prodId,
         quantity: parseInt(document.getElementById('out-quantity').value, 10),
         notes: document.getElementById('out-notes').value,
-        allow_expired: document.getElementById('out-allow-expired')?.checked || false
+        allow_expired: document.getElementById('out-allow-expired')?.checked || false,
+        user_id: currentUser.user_id
     };
 
     try {
         const res = await fetch('/api/stock/out', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${authToken}`
+            },
             body: JSON.stringify(payload)
         });
         const result = await res.json();
 
         if (result.status === 'Success') {
-            showToast(result.message, 'success');
             closeModal('modal-stock-out');
             document.getElementById('form-stock-out').reset();
             await loadDashboardData();
+
+            // Tampilkan Digital Picking Slip Modal!
+            showPickingSlipModal(result.data);
+            showToast(result.message, 'success');
         } else {
             showToast(result.message, 'error');
         }
     } catch (err) {
         showToast('Kesalahan jaringan: ' + err.message, 'error');
     }
+}
+
+// Menampilkan Modal Picking Slip Digital
+function showPickingSlipModal(data) {
+    if (!data) return;
+
+    document.getElementById('ps-ref-no').innerText = data.reference_no;
+    document.getElementById('ps-product-name').innerText = data.product_name;
+    document.getElementById('ps-total-qty').innerText = `${data.total_deducted} Unit`;
+    document.getElementById('ps-date').innerText = new Date().toLocaleString('id-ID');
+    document.getElementById('ps-picker').innerText = `${currentUser.full_name} (${currentUser.role})`;
+
+    const tbody = document.getElementById('ps-items-body');
+    if (tbody && data.batches_affected) {
+        tbody.innerHTML = data.batches_affected.map(b => `
+            <tr class="border-b border-slate-100 text-xs">
+                <td class="p-3 font-mono font-bold">${escapeHtml(b.batch_code)}</td>
+                <td class="p-3 font-mono font-bold text-blue-700">${escapeHtml(b.location_code)}</td>
+                <td class="p-3 text-slate-600">${escapeHtml(b.zone_name)}</td>
+                <td class="p-3 text-slate-500">${escapeHtml(b.aisle)} &bull; ${escapeHtml(b.rack)} &bull; ${escapeHtml(b.tier)} &bull; ${escapeHtml(b.bin)}</td>
+                <td class="p-3 font-black text-right text-rose-600">${b.deducted} Unit</td>
+            </tr>
+        `).join('');
+    }
+
+    openModal('modal-picking-slip');
 }
 
 async function handleStockDisposal(e) {
@@ -582,13 +780,17 @@ async function handleStockDisposal(e) {
     const payload = {
         product_id: prodId,
         quantity: parseInt(document.getElementById('disp-quantity').value, 10),
-        reason: document.getElementById('disp-reason').value
+        reason: document.getElementById('disp-reason').value,
+        user_id: currentUser.user_id
     };
 
     try {
         const res = await fetch('/api/stock/disposal', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${authToken}`
+            },
             body: JSON.stringify(payload)
         });
         const result = await res.json();
@@ -617,13 +819,17 @@ async function handleStockOpname(e) {
     const payload = {
         product_id: prodId,
         physical_stock: parseInt(document.getElementById('opn-physical-qty').value, 10),
-        reason: document.getElementById('opn-reason').value
+        reason: document.getElementById('opn-reason').value,
+        user_id: currentUser.user_id
     };
 
     try {
         const res = await fetch('/api/stock/opname', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${authToken}`
+            },
             body: JSON.stringify(payload)
         });
         const result = await res.json();
@@ -641,13 +847,57 @@ async function handleStockOpname(e) {
     }
 }
 
+async function handleAddLocation(e) {
+    e.preventDefault();
+    const payload = {
+        location_code: document.getElementById('loc-code').value.toUpperCase().trim(),
+        zone_name: document.getElementById('loc-zone').value.trim(),
+        aisle: document.getElementById('loc-aisle').value.trim(),
+        rack: document.getElementById('loc-rack').value.trim(),
+        tier: document.getElementById('loc-tier').value.trim(),
+        bin: document.getElementById('loc-bin').value.trim(),
+        description: document.getElementById('loc-desc')?.value.trim() || ''
+    };
+
+    try {
+        const res = await fetch('/api/locations', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${authToken}`
+            },
+            body: JSON.stringify(payload)
+        });
+        const result = await res.json();
+
+        if (result.status === 'Success') {
+            showToast(result.message, 'success');
+            closeModal('modal-add-location');
+            document.getElementById('form-add-location').reset();
+            await fetchLocations();
+        } else {
+            showToast(result.message, 'error');
+        }
+    } catch (err) {
+        showToast('Kesalahan jaringan: ' + err.message, 'error');
+    }
+}
+
 async function handleDeleteProduct(productId) {
+    if (currentUser.role !== 'ADMIN') {
+        showToast('Akses ditolak: Hanya role ADMIN yang berhak menonaktifkan master produk.', 'error');
+        return;
+    }
+
     if (!confirm(`Konfirmasi penonaktifan master SKU '${productId}'? Tindakan ini hanya berhasil jika stok produk telah 0.`)) {
         return;
     }
 
     try {
-        const res = await fetch(`/api/products/${productId}`, { method: 'DELETE' });
+        const res = await fetch(`/api/products/${productId}`, {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${authToken}` }
+        });
         const result = await res.json();
 
         if (result.status === 'Success') {
@@ -662,7 +912,7 @@ async function handleDeleteProduct(productId) {
 }
 
 // --------------------------------------------------------------------
-// 10. MODAL & DROPDOWN HELPERS
+// 9. MODAL & DROPDOWN HELPERS
 // --------------------------------------------------------------------
 function openModal(id) {
     const el = document.getElementById(id);
@@ -674,7 +924,6 @@ function closeModal(id) {
     if (el) el.classList.add('hidden');
 }
 
-// Tutup modal ketika tombol Escape ditekan
 document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
         document.querySelectorAll('.fixed.inset-0:not(.hidden)').forEach(modal => {
@@ -740,6 +989,20 @@ function populateSupplierDropdowns() {
     ).join('');
 }
 
+function populateLocationDropdowns() {
+    const select = document.getElementById('in-location-id');
+    if (!select) return;
+
+    if (!currentLocations || currentLocations.length === 0) {
+        select.innerHTML = `<option value="">-- Area Penampungan Default --</option>`;
+        return;
+    }
+
+    select.innerHTML = `<option value="">-- Pilih Rak / Bin Gudang --</option>` + currentLocations.map(l => 
+        `<option value="${l.location_id}">${escapeHtml(l.location_code)} — ${escapeHtml(l.zone_name)} (${escapeHtml(l.aisle)}/${escapeHtml(l.rack)})</option>`
+    ).join('');
+}
+
 function populateCategoryFilter() {
     const select = document.getElementById('filter-category');
     if (!select) return;
@@ -756,7 +1019,7 @@ function updateStatCards(products) {
 }
 
 // --------------------------------------------------------------------
-// 11. FILTER & PENCARIAN
+// 10. FILTER & EXPORT
 // --------------------------------------------------------------------
 function filterProducts() {
     const keyword = document.getElementById('search-input')?.value.toLowerCase() || '';
@@ -771,9 +1034,6 @@ function filterProducts() {
     renderProductTable(filtered);
 }
 
-// --------------------------------------------------------------------
-// 12. EXPORT DATA (CSV)
-// --------------------------------------------------------------------
 function exportLogsToCSV() {
     if (!currentTransactionLogs || currentTransactionLogs.length === 0) {
         showToast('Belum ada data transaksi untuk diekspor.', 'warning');

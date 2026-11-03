@@ -18,6 +18,7 @@ DROP TABLE IF EXISTS `stock_transaction_items`;
 DROP TABLE IF EXISTS `stock_transactions`;
 DROP TABLE IF EXISTS `stock_opname`;
 DROP TABLE IF EXISTS `inventory_batches`;
+DROP TABLE IF EXISTS `warehouse_locations`;
 DROP TABLE IF EXISTS `products`;
 DROP TABLE IF EXISTS `suppliers`;
 DROP TABLE IF EXISTS `categories`;
@@ -68,7 +69,25 @@ CREATE TABLE `suppliers` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- --------------------------------------------------------------------
--- 4. TABEL MASTER PRODUK / SKU (products)
+-- 4. TABEL LOKASI RAK / BIN GUDANG (warehouse_locations)
+-- --------------------------------------------------------------------
+CREATE TABLE `warehouse_locations` (
+    `location_id` INT AUTO_INCREMENT PRIMARY KEY,
+    `location_code` VARCHAR(50) NOT NULL UNIQUE,
+    `zone_name` VARCHAR(100) NOT NULL,
+    `aisle` VARCHAR(20) NOT NULL,
+    `rack` VARCHAR(20) NOT NULL,
+    `tier` VARCHAR(20) NOT NULL,
+    `bin` VARCHAR(20) NOT NULL,
+    `description` VARCHAR(255) DEFAULT NULL,
+    `is_active` BOOLEAN NOT NULL DEFAULT TRUE,
+    `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    INDEX `idx_location_zone` (`zone_name`),
+    INDEX `idx_location_code` (`location_code`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------------------
+-- 5. TABEL MASTER PRODUK / SKU (products)
 -- --------------------------------------------------------------------
 CREATE TABLE `products` (
     `product_id` VARCHAR(50) PRIMARY KEY,
@@ -86,13 +105,14 @@ CREATE TABLE `products` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- --------------------------------------------------------------------
--- 5. TABEL BATCH INVENTARIS & EXPIRED TRACKING (inventory_batches)
+-- 6. TABEL BATCH INVENTARIS & EXPIRED TRACKING (inventory_batches)
 -- --------------------------------------------------------------------
 CREATE TABLE `inventory_batches` (
     `batch_id` INT AUTO_INCREMENT PRIMARY KEY,
     `batch_code` VARCHAR(50) DEFAULT NULL,
     `product_id` VARCHAR(50) NOT NULL,
     `supplier_id` INT DEFAULT NULL,
+    `location_id` INT DEFAULT NULL,
     `initial_quantity` INT NOT NULL DEFAULT 0,
     `quantity` INT NOT NULL DEFAULT 0,
     `expired_date` DATE NOT NULL,
@@ -108,14 +128,18 @@ CREATE TABLE `inventory_batches` (
         REFERENCES `suppliers` (`supplier_id`) 
         ON UPDATE CASCADE 
         ON DELETE SET NULL,
+    CONSTRAINT `fk_batches_location` FOREIGN KEY (`location_id`) 
+        REFERENCES `warehouse_locations` (`location_id`) 
+        ON UPDATE CASCADE 
+        ON DELETE SET NULL,
     CONSTRAINT `chk_batch_quantity` CHECK (`quantity` >= 0),
-    -- Index komposit krusial untuk performa FEFO Engine (Urutan Expired Paling Dekat)
     INDEX `idx_batch_fefo` (`product_id`, `quantity`, `expired_date`, `received_date`, `batch_id`),
-    INDEX `idx_batch_expiry` (`expired_date`)
+    INDEX `idx_batch_expiry` (`expired_date`),
+    INDEX `idx_batch_location` (`location_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- --------------------------------------------------------------------
--- 6. TABEL AUDIT LOG TRANSAKSI MUTASI STOK (stock_transactions)
+-- 7. TABEL AUDIT LOG TRANSAKSI MUTASI STOK (stock_transactions)
 -- --------------------------------------------------------------------
 CREATE TABLE `stock_transactions` (
     `transaction_id` INT AUTO_INCREMENT PRIMARY KEY,
@@ -141,7 +165,7 @@ CREATE TABLE `stock_transactions` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- --------------------------------------------------------------------
--- 7. TABEL RINCIAN ALOKASI BATCH TRANSAKSI (stock_transaction_items)
+-- 8. TABEL RINCIAN ALOKASI BATCH TRANSAKSI (stock_transaction_items)
 -- --------------------------------------------------------------------
 CREATE TABLE `stock_transaction_items` (
     `item_id` INT AUTO_INCREMENT PRIMARY KEY,
@@ -161,7 +185,7 @@ CREATE TABLE `stock_transaction_items` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- --------------------------------------------------------------------
--- 8. TABEL REKONSILIASI STOK OPNAME (stock_opname)
+-- 9. TABEL REKONSILIASI STOK OPNAME (stock_opname)
 -- --------------------------------------------------------------------
 CREATE TABLE `stock_opname` (
     `opname_id` INT AUTO_INCREMENT PRIMARY KEY,
@@ -187,14 +211,14 @@ CREATE TABLE `stock_opname` (
 
 
 -- ====================================================================
--- SEED DATA INITIAL (Untuk Pengujian & Portofolio Ready)
+-- SEED DATA INITIAL
 -- ====================================================================
 
 -- 1. Seed Users (Default admin, manager, staff)
 INSERT INTO `users` (`user_id`, `username`, `password_hash`, `full_name`, `role`) VALUES
-(1, 'admin', '$2b$10$3p9h7kE9Q5k9M0m7gPj.1Op4rQ8nJ2e1V6y9K4h3nF5m6p7q8r9s0', 'Choqy Pananda', 'ADMIN'),
-(2, 'manager', '$2b$10$3p9h7kE9Q5k9M0m7gPj.1Op4rQ8nJ2e1V6y9K4h3nF5m6p7q8r9s0', 'Siti Rahmawati', 'MANAGER'),
-(3, 'staff', '$2b$10$3p9h7kE9Q5k9M0m7gPj.1Op4rQ8nJ2e1V6y9K4h3nF5m6p7q8r9s0', 'Budi Santoso', 'STAFF');
+(1, 'admin', 'scrypt$a1b2c3d4e5f60718$3f5a2b1c8d9e0f', 'Choqy Pananda', 'ADMIN'),
+(2, 'manager', 'scrypt$a1b2c3d4e5f60718$3f5a2b1c8d9e0f', 'Siti Rahmawati', 'MANAGER'),
+(3, 'staff', 'scrypt$a1b2c3d4e5f60718$3f5a2b1c8d9e0f', 'Budi Santoso', 'STAFF');
 
 -- 2. Seed Categories
 INSERT INTO `categories` (`category_id`, `category_name`, `description`) VALUES
@@ -209,7 +233,15 @@ INSERT INTO `suppliers` (`supplier_id`, `supplier_code`, `supplier_name`, `conta
 (2, 'SUP-002', 'PT Salim Ivomas Pratama', 'Dewi Lestari', '0813-9876-5432', 'dewi@salimivomas.com', 'Jl. Tanjung Morawa Km 12'),
 (3, 'SUP-003', 'CV Berkah Unggas Nusantara', 'Rahmat Hidayat', '0852-1122-3344', 'rahmat@unggasnusantara.com', 'Deli Serdang, Sumatera Utara');
 
--- 4. Seed Products
+-- 4. Seed Warehouse Locations
+INSERT INTO `warehouse_locations` (`location_id`, `location_code`, `zone_name`, `aisle`, `rack`, `tier`, `bin`, `description`) VALUES
+(1, 'A-01-01', 'Zona Pakan Kering (Dry Feed)', 'Lorong 1', 'Rak 1', 'Tingkat 1', 'Bin 01', 'Rak lantai dasar untuk pakan broiler starter'),
+(2, 'A-01-02', 'Zona Pakan Kering (Dry Feed)', 'Lorong 1', 'Rak 1', 'Tingkat 2', 'Bin 02', 'Rak tingkat kedua untuk pakan broiler finisher'),
+(3, 'B-02-01', 'Zona Sembako & Minyak', 'Lorong 2', 'Rak 2', 'Tingkat 1', 'Bin 01', 'Area penyimpanan karton minyak goreng premium'),
+(4, 'CR-01-01', 'Cold Storage Freezer -18C', 'Lorong Dingin 1', 'Rak 1', 'Tingkat 1', 'Bin 01', 'Ruang pendingin beku karkas ayam potong higienis'),
+(5, 'C-01-01', 'Zona Bahan Kimia & Biosekuriti', 'Lorong 3', 'Rak 1', 'Tingkat 1', 'Bin 01', 'Penyimpanan desinfektan dan sanitizer lantai');
+
+-- 5. Seed Products
 INSERT INTO `products` (`product_id`, `product_name`, `category`, `unit`, `min_stock`, `description`) VALUES
 ('PRD-FEED-01', 'Pakan Broiler Starter (511)', 'Pakan Ternak (Feed)', 'Sak 50Kg', 20, 'Pakan ayam pedaging fase starter umur 1-21 hari'),
 ('PRD-FEED-02', 'Pakan Broiler Finisher (512)', 'Pakan Ternak (Feed)', 'Sak 50Kg', 15, 'Pakan ayam pedaging fase finisher hingga panen'),
@@ -217,25 +249,16 @@ INSERT INTO `products` (`product_id`, `product_name`, `category`, `unit`, `min_s
 ('PRD-MEAT-01', 'Daging Ayam Karkas Frozen 1.0 - 1.2 Kg', 'Produk Olahan Daging (Cold Chain)', 'Kg', 50, 'Ayam beku utuh higienis bersertifikasi halal'),
 ('PRD-SAN-01', 'Desinfektan Biosekuriti Gudang 5L', 'Bahan Kimia & Pembersih', 'Jerigen', 10, 'Formula desinfektan spektrum luas untuk sanitasi lantai gudang');
 
--- 5. Seed Batches (Kombinasi batch expired terdekat & stok aman)
-INSERT INTO `inventory_batches` (`batch_id`, `batch_code`, `product_id`, `supplier_id`, `initial_quantity`, `quantity`, `expired_date`, `received_date`, `notes`) VALUES
--- PRD-FEED-01: Ada batch yang expired 15 hari lagi (Prioritas FEFO) dan batch 90 hari lagi
-(1, 'BTC-FEED01-001', 'PRD-FEED-01', 1, 40, 15, DATE_ADD(CURDATE(), INTERVAL 14 DAY), DATE_SUB(CURDATE(), INTERVAL 60 DAY), 'Batch kedatangan supplier KIM II'),
-(2, 'BTC-FEED01-002', 'PRD-FEED-01', 1, 50, 50, DATE_ADD(CURDATE(), INTERVAL 90 DAY), DATE_SUB(CURDATE(), INTERVAL 10 DAY), 'Penerimaan rutin awal bulan'),
+-- 6. Seed Batches (Ditautkan ke Lokasi Gudang)
+INSERT INTO `inventory_batches` (`batch_id`, `batch_code`, `product_id`, `supplier_id`, `location_id`, `initial_quantity`, `quantity`, `expired_date`, `received_date`, `notes`) VALUES
+(1, 'BTC-FEED01-001', 'PRD-FEED-01', 1, 1, 40, 15, DATE_ADD(CURDATE(), INTERVAL 14 DAY), DATE_SUB(CURDATE(), INTERVAL 60 DAY), 'Batch kedatangan supplier KIM II'),
+(2, 'BTC-FEED01-002', 'PRD-FEED-01', 1, 1, 50, 50, DATE_ADD(CURDATE(), INTERVAL 90 DAY), DATE_SUB(CURDATE(), INTERVAL 10 DAY), 'Penerimaan rutin awal bulan'),
+(3, 'BTC-FEED02-001', 'PRD-FEED-02', 1, 2, 30, 12, DATE_ADD(CURDATE(), INTERVAL 45 DAY), DATE_SUB(CURDATE(), INTERVAL 20 DAY), 'Stok menipis butuh restock'),
+(4, 'BTC-OIL01-001', 'PRD-OIL-01', 2, 3, 60, 60, DATE_ADD(CURDATE(), INTERVAL 180 DAY), DATE_SUB(CURDATE(), INTERVAL 5 DAY), 'Pasokan pabrik Tanjung Morawa'),
+(5, 'BTC-MEAT01-001', 'PRD-MEAT-01', 3, 4, 100, 75, DATE_ADD(CURDATE(), INTERVAL 30 DAY), DATE_SUB(CURDATE(), INTERVAL 7 DAY), 'Simpan pada cold room freezer -18C'),
+(6, 'BTC-SAN01-001', 'PRD-SAN-01', 1, 5, 10, 5, DATE_ADD(CURDATE(), INTERVAL 365 DAY), DATE_SUB(CURDATE(), INTERVAL 30 DAY), 'Sanitasi rutin');
 
--- PRD-FEED-02: Total stok 12 (Di bawah min_stock 15 = Low Stock Warning)
-(3, 'BTC-FEED02-001', 'PRD-FEED-02', 1, 30, 12, DATE_ADD(CURDATE(), INTERVAL 45 DAY), DATE_SUB(CURDATE(), INTERVAL 20 DAY), 'Stok menipis butuh restock'),
-
--- PRD-OIL-01: Stok aman 60 Karton
-(4, 'BTC-OIL01-001', 'PRD-OIL-01', 2, 60, 60, DATE_ADD(CURDATE(), INTERVAL 180 DAY), DATE_SUB(CURDATE(), INTERVAL 5 DAY), 'Pasokan pabrik Tanjung Morawa'),
-
--- PRD-MEAT-01: Cold storage batch expired 30 hari lagi
-(5, 'BTC-MEAT01-001', 'PRD-MEAT-01', 3, 100, 75, DATE_ADD(CURDATE(), INTERVAL 30 DAY), DATE_SUB(CURDATE(), INTERVAL 7 DAY), 'Simpan pada cold room freezer -18C'),
-
--- PRD-SAN-01: 5 jerigen (Low stock, min 10)
-(6, 'BTC-SAN01-001', 'PRD-SAN-01', 1, 10, 5, DATE_ADD(CURDATE(), INTERVAL 365 DAY), DATE_SUB(CURDATE(), INTERVAL 30 DAY), 'Sanitasi rutin');
-
--- 6. Seed Stock Transactions (Initial logs)
+-- 7. Seed Stock Transactions
 INSERT INTO `stock_transactions` (`transaction_id`, `reference_no`, `product_id`, `user_id`, `transaction_type`, `quantity`, `notes`, `created_at`) VALUES
 (1, 'TRX-IN-20261101-0001', 'PRD-FEED-01', 1, 'IN', 40, 'Penerimaan batch perdana BTC-FEED01-001', DATE_SUB(NOW(), INTERVAL 5 DAY)),
 (2, 'TRX-IN-20261101-0002', 'PRD-FEED-01', 1, 'IN', 50, 'Penerimaan restock batch BTC-FEED01-002', DATE_SUB(NOW(), INTERVAL 3 DAY)),
@@ -244,7 +267,7 @@ INSERT INTO `stock_transactions` (`transaction_id`, `reference_no`, `product_id`
 (5, 'TRX-IN-20261102-0003', 'PRD-MEAT-01', 1, 'IN', 100, 'Inbound karkas ayam beku 100 Kg cold chain', DATE_SUB(NOW(), INTERVAL 1 DAY)),
 (6, 'TRX-OUT-20261103-0001', 'PRD-MEAT-01', 3, 'OUT', 25, 'Pengiriman ke Horeca Resto Medan', DATE_SUB(NOW(), INTERVAL 6 HOUR));
 
--- 7. Seed Stock Transaction Items (Breakdown ke batch)
+-- 8. Seed Stock Transaction Items
 INSERT INTO `stock_transaction_items` (`transaction_id`, `batch_id`, `quantity`) VALUES
 (1, 1, 40),
 (2, 2, 50),

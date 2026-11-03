@@ -9,7 +9,6 @@ function sanitizeString(str) {
 
 function isValidDate(dateStr) {
     if (!dateStr || typeof dateStr !== 'string') return false;
-    // Format YYYY-MM-DD
     const regex = /^\d{4}-\d{2}-\d{2}$/;
     if (!regex.test(dateStr)) return false;
     const date = new Date(dateStr);
@@ -85,7 +84,7 @@ exports.validateProduct = (req, res, next) => {
 
 // 2. Validasi Penerimaan Barang (Stock In)
 exports.validateStockIn = (req, res, next) => {
-    let { product_id, quantity, expired_date, supplier_id, notes, user_id, batch_code } = req.body;
+    let { product_id, quantity, expired_date, supplier_id, location_id, notes, user_id, batch_code } = req.body;
 
     product_id = sanitizeString(product_id);
     if (!product_id) {
@@ -111,8 +110,9 @@ exports.validateStockIn = (req, res, next) => {
         quantity: parseInt(quantity, 10),
         expired_date,
         supplier_id: supplier_id ? parseInt(supplier_id, 10) : null,
+        location_id: location_id ? parseInt(location_id, 10) : null,
         notes: sanitizeString(notes) || 'Penerimaan batch barang masuk',
-        user_id: user_id ? parseInt(user_id, 10) : 1,
+        user_id: user_id ? parseInt(user_id, 10) : (req.user ? req.user.user_id : 1),
         batch_code: sanitizeString(batch_code)
     };
 
@@ -139,7 +139,7 @@ exports.validateStockOut = (req, res, next) => {
         product_id,
         quantity: parseInt(quantity, 10),
         notes: sanitizeString(notes) || 'Pengeluaran barang alokasi FEFO',
-        user_id: user_id ? parseInt(user_id, 10) : 1,
+        user_id: user_id ? parseInt(user_id, 10) : (req.user ? req.user.user_id : 1),
         allow_expired: Boolean(allow_expired)
     };
 
@@ -174,7 +174,7 @@ exports.validateStockDisposal = (req, res, next) => {
         product_id,
         quantity: parseInt(quantity, 10),
         reason,
-        user_id: user_id ? parseInt(user_id, 10) : 1
+        user_id: user_id ? parseInt(user_id, 10) : (req.user ? req.user.user_id : 1)
     };
 
     next();
@@ -208,7 +208,7 @@ exports.validateStockOpname = (req, res, next) => {
         product_id,
         physical_stock: parseInt(physical_stock, 10),
         reason,
-        user_id: user_id ? parseInt(user_id, 10) : 1
+        user_id: user_id ? parseInt(user_id, 10) : (req.user ? req.user.user_id : 1)
     };
 
     next();

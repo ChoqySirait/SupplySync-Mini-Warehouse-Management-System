@@ -73,6 +73,8 @@ exports.getFifoBatches = async (req, res) => {
                 b.initial_quantity,
                 b.expired_date,
                 b.received_date,
+                COALESCE(l.location_code, 'A-01-01') AS location_code,
+                COALESCE(l.zone_name, 'Area Umum') AS zone_name,
                 DATEDIFF(b.expired_date, CURDATE()) AS days_until_expiration,
                 CASE 
                     WHEN b.expired_date < CURDATE() THEN 'Expired'
@@ -81,6 +83,7 @@ exports.getFifoBatches = async (req, res) => {
                 END AS freshness_status
             FROM inventory_batches b
             JOIN products p ON b.product_id = p.product_id
+            LEFT JOIN warehouse_locations l ON b.location_id = l.location_id
             WHERE b.quantity > 0
             ORDER BY b.expired_date ASC, b.received_date ASC, b.batch_id ASC;
         `;
@@ -93,7 +96,7 @@ exports.getFifoBatches = async (req, res) => {
     }
 };
 
-// 3. Ambil Rincian Batch per SKU Produk
+// 3. Ambil Rincian Batch per SKU Produk Lengkap dengan Lokasi Rak Fisik
 exports.getProductBatches = async (req, res) => {
     try {
         const { id } = req.params;
@@ -103,6 +106,12 @@ exports.getProductBatches = async (req, res) => {
                 b.batch_code,
                 b.product_id,
                 s.supplier_name,
+                COALESCE(l.location_code, 'A-01-01') AS location_code,
+                COALESCE(l.zone_name, 'Zona Utama') AS zone_name,
+                COALESCE(l.aisle, 'Lorong 1') AS aisle,
+                COALESCE(l.rack, 'Rak 1') AS rack,
+                COALESCE(l.tier, 'Tingkat 1') AS tier,
+                COALESCE(l.bin, 'Bin 1') AS bin,
                 b.initial_quantity,
                 b.quantity,
                 b.expired_date,
@@ -111,6 +120,7 @@ exports.getProductBatches = async (req, res) => {
                 DATEDIFF(b.expired_date, CURDATE()) AS days_until_expiration
             FROM inventory_batches b
             LEFT JOIN suppliers s ON b.supplier_id = s.supplier_id
+            LEFT JOIN warehouse_locations l ON b.location_id = l.location_id
             WHERE b.product_id = ? AND b.quantity > 0
             ORDER BY b.expired_date ASC, b.received_date ASC;
         `;
@@ -191,7 +201,6 @@ exports.deleteProduct = async (req, res) => {
     try {
         const { id } = req.params;
 
-        // Cek apakah masih ada stok aktif
         const [[stockRow]] = await db.query(
             `SELECT COALESCE(SUM(quantity), 0) AS total_stock FROM inventory_batches WHERE product_id = ? AND quantity > 0`,
             [id]
@@ -204,7 +213,6 @@ exports.deleteProduct = async (req, res) => {
             });
         }
 
-        // Soft delete produk
         await db.query(`UPDATE products SET is_active = 0 WHERE product_id = ?`, [id]);
         res.json({ status: 'Success', message: `Produk '${id}' berhasil dinonaktifkan.` });
     } catch (error) {

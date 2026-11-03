@@ -1,7 +1,7 @@
 /**
- * SupplySync WMS - Core Inventory & FEFO Engine Service
+ * SupplySync WMS - Core Inventory, FEFO Engine, & Picking Route Service
  * Mengelola alokasi First-Expired, First-Out (FEFO), concurrency locking,
- * dan audit trail batch traceability.
+ * batch traceability, dan instruksi lokasi rak gudang (Bin Picking Route).
  */
 
 /**
@@ -42,7 +42,14 @@ function allocateFefoBatches(batches, requiredQty) {
             batch_code: batch.batch_code || `BATCH-${batch.batch_id}`,
             expired_date: batch.expired_date,
             deducted: deduct,
-            remaining: batch.quantity - deduct
+            remaining: batch.quantity - deduct,
+            location_id: batch.location_id || null,
+            location_code: batch.location_code || 'A-01-01',
+            zone_name: batch.zone_name || 'Area Umum',
+            aisle: batch.aisle || 'Lorong 1',
+            rack: batch.rack || 'Rak 1',
+            tier: batch.tier || 'Tingkat 1',
+            bin: batch.bin || 'Bin 1'
         });
 
         remainingNeeded -= deduct;
@@ -70,7 +77,7 @@ function generateReferenceNumber(type) {
 /**
  * 1. Proses Penerimaan Barang Masuk (Stock Inbound)
  */
-async function processStockIn(connection, { product_id, quantity, expired_date, supplier_id, notes, user_id, batch_code }) {
+async function processStockIn(connection, { product_id, quantity, expired_date, supplier_id, location_id, notes, user_id, batch_code }) {
     // 1. Kunci produk dan periksa status aktif
     const [products] = await connection.query(
         `SELECT product_id, product_name, is_active FROM products WHERE product_id = ? FOR UPDATE`,
@@ -89,11 +96,11 @@ async function processStockIn(connection, { product_id, quantity, expired_date, 
     const generatedBatchCode = batch_code || `BTC-${product_id}-${Date.now().toString().slice(-6)}`;
     const refNo = generateReferenceNumber('IN');
 
-    // 2. Simpan batch baru ke inventory_batches
+    // 2. Simpan batch baru ke inventory_batches lengkap dengan lokasi rak
     const [batchResult] = await connection.query(
-        `INSERT INTO inventory_batches (batch_code, product_id, supplier_id, initial_quantity, quantity, expired_date, received_date, notes) 
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-        [generatedBatchCode, product_id, supplier_id || null, quantity, quantity, expired_date, today, notes || null]
+        `INSERT INTO inventory_batches (batch_code, product_id, supplier_id, location_id, initial_quantity, quantity, expired_date, received_date, notes) 
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [generatedBatchCode, product_id, supplier_id || null, location_id || null, quantity, quantity, expired_date, today, notes || null]
     );
 
     const newBatchId = batchResult.insertId;
@@ -120,12 +127,13 @@ async function processStockIn(connection, { product_id, quantity, expired_date, 
         batch_code: generatedBatchCode,
         product_name: products[0].product_name,
         quantity,
-        expired_date
+        expired_date,
+        location_id: location_id || null
     };
 }
 
 /**
- * 2. Proses Pengeluaran Barang Otomatis FEFO (Stock Outflow)
+ * 2. Proses Pengeluaran Barang Otomatis FEFO & Pembuatan Picking Slip (Stock Outflow)
  */
 async function processStockOutFefo(connection, { product_id, quantity, user_id, notes, allow_expired = false }) {
     // 1. Kunci baris master produk untuk mencegah race condition / deadlocks
@@ -142,19 +150,33 @@ async function processStockOutFefo(connection, { product_id, quantity, user_id, 
         throw new Error(`Produk '${products[0].product_name}' (${product_id}) berstatus non-aktif.`);
     }
 
-    // 2. Ambil seluruh batch aktif terurut FEFO dengan penguncian FOR UPDATE
+    // 2. Ambil seluruh batch aktif terurut FEFO dengan lokasi rak fisik
     let query = `
-        SELECT batch_id, batch_code, product_id, quantity, expired_date, received_date 
-        FROM inventory_batches 
-        WHERE product_id = ? AND quantity > 0
+        SELECT 
+            b.batch_id, 
+            b.batch_code, 
+            b.product_id, 
+            b.quantity, 
+            b.expired_date, 
+            b.received_date,
+            b.location_id,
+            COALESCE(l.location_code, 'A-01-01') AS location_code,
+            COALESCE(l.zone_name, 'Zona Penyimpanan Umum') AS zone_name,
+            COALESCE(l.aisle, 'Lorong 1') AS aisle,
+            COALESCE(l.rack, 'Rak 1') AS rack,
+            COALESCE(l.tier, 'Tingkat 1') AS tier,
+            COALESCE(l.bin, 'Bin 1') AS bin
+        FROM inventory_batches b
+        LEFT JOIN warehouse_locations l ON b.location_id = l.location_id
+        WHERE b.product_id = ? AND b.quantity > 0
     `;
     const params = [product_id];
 
     if (!allow_expired) {
-        query += ` AND expired_date >= CURDATE()`;
+        query += ` AND b.expired_date >= CURDATE()`;
     }
 
-    query += ` ORDER BY expired_date ASC, received_date ASC, batch_id ASC FOR UPDATE`;
+    query += ` ORDER BY b.expired_date ASC, b.received_date ASC, b.batch_id ASC FOR UPDATE`;
 
     const [batches] = await connection.query(query, params);
 
@@ -162,7 +184,6 @@ async function processStockOutFefo(connection, { product_id, quantity, user_id, 
     const totalAvailable = batches.reduce((sum, b) => sum + b.quantity, 0);
 
     if (totalAvailable < quantity) {
-        // Cek apakah ada batch yang kedaluwarsa jika filter aktif
         let extraInfo = '';
         if (!allow_expired) {
             const [[expiredCount]] = await connection.query(
@@ -172,7 +193,7 @@ async function processStockOutFefo(connection, { product_id, quantity, user_id, 
                 [product_id]
             );
             if (expiredCount && expiredCount.expired_stock > 0) {
-                extraInfo = ` (${expiredCount.expired_stock} unit kedaluwarsa dan tidak dialokasikan untuk penjualan. Gunakan modul Disposal untuk mengeluarkan barang kedaluwarsa).`;
+                extraInfo = ` (${expiredCount.expired_stock} unit kedaluwarsa dan tidak dialokasikan untuk penjualan. Gunakan modul Disposal).`;
             }
         }
 
@@ -207,12 +228,21 @@ async function processStockOutFefo(connection, { product_id, quantity, user_id, 
         );
     }
 
+    // 7. Rute Pengambilan Rak (Picking Instructions) untuk staf gudang
+    const pickingInstructions = allocations.map(a => ({
+        batch_code: a.batch_code,
+        quantity_to_pick: a.deducted,
+        location: `${a.location_code} (${a.zone_name})`,
+        path: `${a.aisle} > ${a.rack} > ${a.tier} > ${a.bin}`
+    }));
+
     return {
         transaction_id: transactionId,
         reference_no: refNo,
         product_name: products[0].product_name,
         total_deducted: quantity,
-        batches_affected: allocations
+        batches_affected: allocations,
+        picking_instructions: pickingInstructions
     };
 }
 
@@ -220,7 +250,6 @@ async function processStockOutFefo(connection, { product_id, quantity, user_id, 
  * 3. Modul Pembuangan Barang Afkir/Kedaluwarsa (Stock Disposal)
  */
 async function processStockDisposal(connection, { product_id, quantity, reason, user_id }) {
-    // 1. Kunci master produk
     const [products] = await connection.query(
         `SELECT product_id, product_name, is_active FROM products WHERE product_id = ? FOR UPDATE`,
         [product_id]
@@ -230,12 +259,14 @@ async function processStockDisposal(connection, { product_id, quantity, reason, 
         throw new Error(`Produk dengan SKU '${product_id}' tidak ditemukan di database.`);
     }
 
-    // 2. Ambil batch (prioritaskan yang expired atau paling dekat expired)
     const [batches] = await connection.query(
-        `SELECT batch_id, batch_code, product_id, quantity, expired_date, received_date 
-         FROM inventory_batches 
-         WHERE product_id = ? AND quantity > 0 
-         ORDER BY expired_date ASC, received_date ASC, batch_id ASC 
+        `SELECT 
+            b.batch_id, b.batch_code, b.product_id, b.quantity, b.expired_date, b.received_date,
+            b.location_id, COALESCE(l.location_code, 'A-01-01') AS location_code, COALESCE(l.zone_name, 'Area Umum') AS zone_name
+         FROM inventory_batches b
+         LEFT JOIN warehouse_locations l ON b.location_id = l.location_id
+         WHERE b.product_id = ? AND b.quantity > 0 
+         ORDER BY b.expired_date ASC, b.received_date ASC, b.batch_id ASC 
          FOR UPDATE`,
         [product_id]
     );
@@ -284,7 +315,6 @@ async function processStockDisposal(connection, { product_id, quantity, reason, 
  * 4. Modul Rekonsiliasi Stok Opname (Physical vs System Stock)
  */
 async function processStockOpname(connection, { product_id, physical_stock, reason, user_id }) {
-    // 1. Kunci master produk
     const [products] = await connection.query(
         `SELECT product_id, product_name, is_active FROM products WHERE product_id = ? FOR UPDATE`,
         [product_id]
@@ -294,7 +324,6 @@ async function processStockOpname(connection, { product_id, physical_stock, reas
         throw new Error(`Produk dengan SKU '${product_id}' tidak ditemukan di database.`);
     }
 
-    // 2. Hitung total stok sistem saat ini
     const [[sysStockRow]] = await connection.query(
         `SELECT COALESCE(SUM(quantity), 0) AS total_stock 
          FROM inventory_batches 
@@ -307,16 +336,13 @@ async function processStockOpname(connection, { product_id, physical_stock, reas
 
     const opnameNumber = `OPN-${product_id}-${Date.now().toString().slice(-6)}`;
 
-    // 3. Catat di tabel stock_opname
     const [opnameResult] = await connection.query(
         `INSERT INTO stock_opname (opname_number, product_id, system_stock, physical_stock, difference, reason, performed_by, status)
          VALUES (?, ?, ?, ?, ?, ?, ?, 'APPROVED')`,
         [opnameNumber, product_id, systemStock, physical_stock, difference, reason, user_id || 1]
     );
 
-    // 4. Jika ada selisih, lakukan penyesuaian stok
     if (difference > 0) {
-        // Surplus: Buat batch adjustment baru dengan tanggal kedaluwarsa 1 tahun ke depan
         const today = new Date().toISOString().split('T')[0];
         const nextYear = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
         const batchCode = `BTC-ADJ-${product_id}-${Date.now().toString().slice(-5)}`;
@@ -339,7 +365,6 @@ async function processStockOpname(connection, { product_id, physical_stock, reas
             [adjTrx.insertId, adjBatch.insertId, difference]
         );
     } else if (difference < 0) {
-        // Defisit: Kurangi stok sebesar abs(difference) menggunakan FEFO
         const qtyToReduce = Math.abs(difference);
 
         const [batches] = await connection.query(
