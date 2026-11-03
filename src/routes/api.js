@@ -10,6 +10,8 @@ const authController = require('../controllers/authController');
 const analyticsController = require('../controllers/analyticsController');
 const reportController = require('../controllers/reportController');
 const systemController = require('../controllers/systemController');
+const facilityController = require('../controllers/facilityController');
+const transferController = require('../controllers/transferController');
 
 const validator = require('../middlewares/validator');
 const { authenticateToken, optionalAuth, authorizeRole } = require('../middlewares/authMiddleware');
@@ -62,5 +64,17 @@ router.get('/system/health-check', systemController.getHealthAndIntegrity);
 router.get('/system/backups', optionalAuth, systemController.getBackupsList);
 router.post('/system/backup', optionalAuth, systemController.createBackup);
 router.get('/system/backups/:filename', optionalAuth, systemController.downloadBackupFile);
+
+// 8. Routes Fasilitas Gudang / Multi-Facility Management
+router.get('/facilities', facilityController.getAllFacilities);
+router.post('/facilities', optionalAuth, authorizeRole('ADMIN', 'MANAGER'), facilityController.createFacility);
+router.get('/facilities/:id/locations', facilityController.getFacilityLocations);
+
+// 9. Routes Transfer Stok Antar-Gudang (Inter-Warehouse Transfers)
+router.get('/transfers', transferController.getAllTransfers);
+router.get('/transfers/:id', transferController.getTransferById);
+router.post('/transfers', optionalAuth, authorizeRole('ADMIN', 'MANAGER'), transferController.createTransfer);
+router.post('/transfers/:id/receive', optionalAuth, authorizeRole('ADMIN', 'MANAGER'), transferController.receiveTransfer);
+router.post('/transfers/:id/cancel', optionalAuth, authorizeRole('ADMIN', 'MANAGER'), transferController.cancelTransfer);
 
 module.exports = router;

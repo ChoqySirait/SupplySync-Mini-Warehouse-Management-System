@@ -89,11 +89,16 @@ function switchTab(tabName) {
         overview: 'Dashboard Overview & Analytics',
         inventory: 'Master Inventaris & Rincian Batch SKU',
         movements: 'Pusat Transaksi & Mutasi Stok (FEFO)',
+        transfers: 'Transfer Antar-Gudang & Relokasi Multi-Fasilitas',
         opname: 'Rekonsiliasi Stock Opname Fisik',
         locations: 'Peta Lokasi Rak & Bin Gudang',
         audit: 'Audit Trail Transaksi Real-time'
     };
     document.getElementById('page-title').innerText = titles[tabName] || 'SupplySync Enterprise WMS';
+
+    if (tabName === 'transfers') {
+        loadTransfersList();
+    }
 
     closeMobileSidebar();
 }
@@ -225,7 +230,9 @@ async function loadDashboardData() {
             fetchFifoBatches(),
             fetchKpiMetrics(),
             loadTransactionLogs(),
-            loadOpnameLogs()
+            loadOpnameLogs(),
+            loadFacilities(),
+            loadTransfersList()
         ]);
     } catch (error) {
         console.error('❌ Gagal sinkronisasi data dashboard:', error);
@@ -1627,6 +1634,426 @@ async function triggerDatabaseBackup() {
             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"/></svg>
             Buat Backup Sekarang
         `;
+    }
+}
+
+// --------------------------------------------------------------------
+// 10. MULTI-FACILITY & INTER-WAREHOUSE TRANSFERS MANAGEMENT
+// --------------------------------------------------------------------
+let currentFacilities = [];
+let currentActiveTransfer = null;
+
+async function loadFacilities() {
+    try {
+        const res = await fetch('/api/facilities');
+        const json = await res.json();
+        if (json.status === 'Success' && json.data) {
+            currentFacilities = json.data;
+        }
+    } catch (err) {
+        console.warn('Gagal memuat daftar fasilitas gudang:', err.message);
+    }
+}
+
+async function loadTransfersList() {
+    const tbody = document.getElementById('transfers-tbody');
+    if (!tbody) return;
+
+    tbody.innerHTML = `<tr><td colspan="8" class="p-8 text-center text-slate-400">Memuat mutasi transfer antar-gudang...</td></tr>`;
+
+    const statusFilter = document.getElementById('filter-transfer-status') 
+        ? document.getElementById('filter-transfer-status').value 
+        : '';
+
+    let url = '/api/transfers';
+    if (statusFilter) url += `?status=${encodeURIComponent(statusFilter)}`;
+
+    try {
+        const res = await fetch(url);
+        const json = await res.json();
+
+        if (json.status === 'Success' && Array.isArray(json.data)) {
+            const list = json.data;
+
+            // Hitung KPI
+            let inTransitCount = 0;
+            let inTransitUnits = 0;
+            let totalSent = 0;
+            let totalReceived = 0;
+            let totalDiscrepancy = 0;
+
+            list.forEach(t => {
+                totalSent += (t.total_sent_quantity || 0);
+                totalReceived += (t.total_received_quantity || 0);
+                if (t.status === 'IN_TRANSIT') {
+                    inTransitCount++;
+                    inTransitUnits += (t.total_sent_quantity || 0);
+                }
+                if (t.status === 'PARTIALLY_RECEIVED') {
+                    totalDiscrepancy += Math.max(0, (t.total_sent_quantity || 0) - (t.total_received_quantity || 0));
+                }
+            });
+
+            if (document.getElementById('stat-trf-transit')) document.getElementById('stat-trf-transit').innerText = `${inTransitCount} Transfer`;
+            if (document.getElementById('stat-trf-transit-units')) document.getElementById('stat-trf-transit-units').innerText = `${inTransitUnits} Unit dalam perjalanan`;
+            if (document.getElementById('stat-trf-sent')) document.getElementById('stat-trf-sent').innerText = `${totalSent} Unit`;
+            if (document.getElementById('stat-trf-received')) document.getElementById('stat-trf-received').innerText = `${totalReceived} Unit`;
+            if (document.getElementById('stat-trf-discrepancy')) document.getElementById('stat-trf-discrepancy').innerText = `${totalDiscrepancy} Unit`;
+
+            tbody.innerHTML = '';
+            if (list.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="8" class="p-8 text-center text-slate-400">Belum ada catatan transfer antar-gudang.</td></tr>`;
+                return;
+            }
+
+            list.forEach(t => {
+                const tr = document.createElement('tr');
+                tr.className = 'hover:bg-slate-50 transition border-b border-slate-100 text-xs';
+
+                let statusBadge = '';
+                if (t.status === 'IN_TRANSIT') {
+                    statusBadge = `<span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200 animate-pulse">IN_TRANSIT</span>`;
+                } else if (t.status === 'RECEIVED') {
+                    statusBadge = `<span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">RECEIVED</span>`;
+                } else if (t.status === 'PARTIALLY_RECEIVED') {
+                    statusBadge = `<span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200">PARTIAL (${t.total_discrepancy} Selisih)</span>`;
+                } else if (t.status === 'CANCELLED') {
+                    statusBadge = `<span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-500 border border-slate-200">CANCELLED</span>`;
+                }
+
+                const sentDate = t.sent_at 
+                    ? new Date(t.sent_at).toLocaleString('id-ID', { dateStyle: 'short', timeStyle: 'short' })
+                    : '-';
+
+                let actionBtns = `
+                    <button onclick="viewTransferDetail(${t.transfer_id})" class="px-2.5 py-1 text-[11px] font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg transition" title="Lihat rincian transfer">
+                        Detail
+                    </button>
+                `;
+
+                if (t.status === 'IN_TRANSIT') {
+                    actionBtns += `
+                        <button onclick="openReceiveTransferModal(${t.transfer_id})" class="px-2.5 py-1 text-[11px] font-semibold bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-lg transition" title="Konfirmasi penerimaan barang di gudang tujuan">
+                            Terima
+                        </button>
+                        <button onclick="cancelTransfer(${t.transfer_id}, '${escapeHtml(t.transfer_number)}')" class="px-2 py-1 text-[11px] font-semibold bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-lg transition" title="Batalkan pengiriman dan kembalikan stok">
+                            Batal
+                        </button>
+                    `;
+                }
+
+                tr.innerHTML = `
+                    <td class="p-3 font-mono font-bold text-indigo-700">${escapeHtml(t.transfer_number)}</td>
+                    <td class="p-3">
+                        <span class="font-bold text-slate-900 block">${escapeHtml(t.source_facility_name)}</span>
+                        <span class="text-slate-400 text-[10px] flex items-center gap-1">&rarr; Menuju ${escapeHtml(t.destination_facility_name)}</span>
+                    </td>
+                    <td class="p-3 text-center font-bold text-blue-700">${t.total_sent_quantity} Unit</td>
+                    <td class="p-3 text-center font-bold text-emerald-600">${t.total_received_quantity} Unit</td>
+                    <td class="p-3 text-center">${statusBadge}</td>
+                    <td class="p-3 font-mono text-slate-500">${sentDate}</td>
+                    <td class="p-3 text-slate-600">${escapeHtml(t.sender_name || 'Admin')}</td>
+                    <td class="p-3 text-right">
+                        <div class="flex items-center justify-end gap-1.5">${actionBtns}</div>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+    } catch (err) {
+        tbody.innerHTML = `<tr><td colspan="8" class="p-8 text-center text-rose-500">Gagal memuat transfer: ${escapeHtml(err.message)}</td></tr>`;
+    }
+}
+
+async function openCreateTransferModal() {
+    await loadFacilities();
+
+    const srcSelect = document.getElementById('trf-source-facility');
+    const destSelect = document.getElementById('trf-dest-facility');
+    const prodSelect = document.getElementById('trf-product-id');
+
+    if (srcSelect && destSelect) {
+        srcSelect.innerHTML = `<option value="">Pilih Gudang Asal...</option>`;
+        destSelect.innerHTML = `<option value="">Pilih Gudang Tujuan...</option>`;
+
+        currentFacilities.forEach(f => {
+            srcSelect.innerHTML += `<option value="${f.facility_id}">${escapeHtml(f.facility_code)} - ${escapeHtml(f.facility_name)} (${f.city})</option>`;
+            destSelect.innerHTML += `<option value="${f.facility_id}">${escapeHtml(f.facility_code)} - ${escapeHtml(f.facility_name)} (${f.city})</option>`;
+        });
+    }
+
+    if (prodSelect) {
+        prodSelect.innerHTML = `<option value="">Pilih Produk...</option>`;
+        currentProducts.forEach(p => {
+            prodSelect.innerHTML += `<option value="${escapeHtml(p.product_id)}">${escapeHtml(p.product_id)} - ${escapeHtml(p.product_name)} (Stok Total: ${p.total_stock || 0} ${p.unit})</option>`;
+        });
+    }
+
+    document.getElementById('form-create-transfer').reset();
+    openModal('modal-create-transfer');
+}
+
+function handleSourceFacilityChange() {
+    const srcId = parseInt(document.getElementById('trf-source-facility').value, 10);
+    const destSelect = document.getElementById('trf-dest-facility');
+
+    destSelect.innerHTML = `<option value="">Pilih Gudang Tujuan...</option>`;
+    currentFacilities.forEach(f => {
+        if (f.facility_id !== srcId) {
+            destSelect.innerHTML += `<option value="${f.facility_id}">${escapeHtml(f.facility_code)} - ${escapeHtml(f.facility_name)} (${f.city})</option>`;
+        }
+    });
+}
+
+async function handleCreateTransfer(event) {
+    event.preventDefault();
+    const btn = document.getElementById('btn-submit-transfer');
+    btn.disabled = true;
+
+    const sourceFacilityId = document.getElementById('trf-source-facility').value;
+    const destFacilityId = document.getElementById('trf-dest-facility').value;
+    const productId = document.getElementById('trf-product-id').value;
+    const quantity = parseInt(document.getElementById('trf-quantity').value, 10);
+    const notes = document.getElementById('trf-notes').value;
+
+    try {
+        const res = await fetch('/api/transfers', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${sessionStorage.getItem('supplysync_token') || ''}`
+            },
+            body: JSON.stringify({
+                source_facility_id: sourceFacilityId,
+                destination_facility_id: destFacilityId,
+                items: [{ product_id: productId, quantity }],
+                notes
+            })
+        });
+
+        const json = await res.json();
+        if (json.status === 'Success') {
+            showToast(`Transfer #${json.data.transfer_number} berhasil dimulai! Stok kini berstatus IN_TRANSIT.`, 'success');
+            closeModal('modal-create-transfer');
+            loadTransfersList();
+            loadDashboardData();
+        } else {
+            showToast(json.message || 'Gagal memulai transfer antar-gudang.', 'error');
+        }
+    } catch (err) {
+        showToast('Kesalahan jaringan: ' + err.message, 'error');
+    } finally {
+        btn.disabled = false;
+    }
+}
+
+async function openReceiveTransferModal(transferId) {
+    document.getElementById('rcv-transfer-id').value = transferId;
+    const tbody = document.getElementById('rcv-items-tbody');
+    tbody.innerHTML = `<tr><td colspan="5" class="p-4 text-center text-slate-400">Memuat rincian transfer...</td></tr>`;
+
+    try {
+        const res = await fetch(`/api/transfers/${transferId}`);
+        const json = await res.json();
+
+        if (json.status === 'Success' && json.data) {
+            const trf = json.data;
+            document.getElementById('rcv-transfer-number').innerText = trf.transfer_number;
+            document.getElementById('rcv-route-info').innerText = `${trf.source_facility_name} → ${trf.destination_facility_name}`;
+
+            // Load lokasi gudang tujuan
+            const locSelect = document.getElementById('rcv-destination-location');
+            locSelect.innerHTML = `<option value="">Pilih Lokasi Rak...</option>`;
+            try {
+                const locRes = await fetch(`/api/facilities/${trf.destination_facility_id}/locations`);
+                const locJson = await locRes.json();
+                if (locJson.data && locJson.data.length > 0) {
+                    locJson.data.forEach(l => {
+                        locSelect.innerHTML += `<option value="${l.location_id}">${escapeHtml(l.location_code)} (${escapeHtml(l.zone_name)} - ${escapeHtml(l.rack)})</option>`;
+                    });
+                }
+            } catch (_) {}
+
+            tbody.innerHTML = '';
+            (trf.items || []).forEach(item => {
+                const expDate = item.expired_date ? item.expired_date.split('T')[0] : '-';
+                const tr = document.createElement('tr');
+                tr.className = 'border-b border-slate-100';
+                tr.innerHTML = `
+                    <td class="p-2.5">
+                        <span class="font-bold text-slate-800 block">${escapeHtml(item.product_name)}</span>
+                        <span class="font-mono text-slate-500 text-[10px]">${escapeHtml(item.product_id)} | Batch: ${escapeHtml(item.batch_code || '-')}</span>
+                    </td>
+                    <td class="p-2.5 text-center font-mono text-[11px]">${expDate}</td>
+                    <td class="p-2.5 text-center font-bold text-blue-700">${item.sent_quantity}</td>
+                    <td class="p-2.5 text-center">
+                        <input type="number" data-item-id="${item.item_id}" data-sent-qty="${item.sent_quantity}" value="${item.sent_quantity}" min="0" max="${item.sent_quantity}" class="rcv-item-qty w-20 text-center bg-slate-50 border border-slate-300 rounded-lg p-1.5 font-bold text-emerald-700 outline-none focus:ring-1 focus:ring-emerald-500">
+                    </td>
+                    <td class="p-2.5">
+                        <input type="text" data-reason-item-id="${item.item_id}" placeholder="Alasan jika rusak / hilang di jalan" class="rcv-item-reason w-full bg-slate-50 border border-slate-300 rounded-lg p-1.5 text-[11px] outline-none focus:ring-1 focus:ring-amber-500">
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+
+            openModal('modal-receive-transfer');
+        } else {
+            showToast(json.message || 'Gagal memuat transfer.', 'error');
+        }
+    } catch (err) {
+        showToast('Kesalahan jaringan: ' + err.message, 'error');
+    }
+}
+
+async function submitReceiveTransfer() {
+    const transferId = document.getElementById('rcv-transfer-id').value;
+    const destLocId = document.getElementById('rcv-destination-location').value;
+    const notes = document.getElementById('rcv-notes').value;
+
+    const qtyInputs = document.querySelectorAll('.rcv-item-qty');
+    const receivedItems = [];
+
+    qtyInputs.forEach(input => {
+        const itemId = parseInt(input.getAttribute('data-item-id'), 10);
+        const sentQty = parseInt(input.getAttribute('data-sent-qty'), 10);
+        const recvQty = parseInt(input.value, 10) || 0;
+        const reasonInput = document.querySelector(`.rcv-item-reason[data-reason-item-id="${itemId}"]`);
+        const reason = reasonInput ? reasonInput.value.trim() : '';
+
+        receivedItems.push({
+            item_id: itemId,
+            received_quantity: recvQty,
+            destination_location_id: destLocId ? parseInt(destLocId, 10) : null,
+            discrepancy_reason: reason || (recvQty < sentQty ? 'Selisih kuantitas saat penerimaan fisik' : null)
+        });
+    });
+
+    const btn = document.getElementById('btn-submit-receive-trf');
+    btn.disabled = true;
+
+    try {
+        const res = await fetch(`/api/transfers/${transferId}/receive`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${sessionStorage.getItem('supplysync_token') || ''}`
+            },
+            body: JSON.stringify({
+                received_items: receivedItems,
+                notes
+            })
+        });
+
+        const json = await res.json();
+        if (json.status === 'Success') {
+            showToast(`Penerimaan transfer berhasil diselesaikan! Status: ${json.data.status}`, 'success');
+            closeModal('modal-receive-transfer');
+            loadTransfersList();
+            loadDashboardData();
+        } else {
+            showToast(json.message || 'Gagal memproses penerimaan transfer.', 'error');
+        }
+    } catch (err) {
+        showToast('Kesalahan jaringan: ' + err.message, 'error');
+    } finally {
+        btn.disabled = false;
+    }
+}
+
+async function cancelTransfer(transferId, transferNumber) {
+    const reason = prompt(`Masukkan alasan pembatalan transfer #${transferNumber}:`, 'Armada truk pengangkut batal diberangkatkan');
+    if (!reason) return;
+
+    try {
+        const res = await fetch(`/api/transfers/${transferId}/cancel`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${sessionStorage.getItem('supplysync_token') || ''}`
+            },
+            body: JSON.stringify({ cancel_reason: reason })
+        });
+
+        const json = await res.json();
+        if (json.status === 'Success') {
+            showToast(`Surat transfer #${transferNumber} berhasil dibatalkan dan stok telah dikembalikan ke gudang asal!`, 'success');
+            loadTransfersList();
+            loadDashboardData();
+        } else {
+            showToast(json.message || 'Gagal membatalkan transfer.', 'error');
+        }
+    } catch (err) {
+        showToast('Kesalahan jaringan: ' + err.message, 'error');
+    }
+}
+
+async function viewTransferDetail(transferId) {
+    try {
+        const res = await fetch(`/api/transfers/${transferId}`);
+        const json = await res.json();
+
+        if (json.status === 'Success' && json.data) {
+            currentActiveTransfer = json.data;
+            const t = json.data;
+
+            document.getElementById('dtl-transfer-number').innerText = t.transfer_number;
+            document.getElementById('dtl-source-facility').innerText = `${t.source_facility_name} (${t.source_facility_code})`;
+            document.getElementById('dtl-dest-facility').innerText = `${t.destination_facility_name} (${t.destination_facility_code})`;
+            document.getElementById('dtl-qty-info').innerText = `${t.total_sent_quantity} Dikirim / ${t.total_received_quantity} Diterima`;
+            document.getElementById('dtl-notes').innerText = t.notes || '-';
+
+            const badge = document.getElementById('dtl-status-badge');
+            badge.innerText = t.status;
+            if (t.status === 'IN_TRANSIT') badge.className = 'px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800';
+            else if (t.status === 'RECEIVED') badge.className = 'px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800';
+            else if (t.status === 'PARTIALLY_RECEIVED') badge.className = 'px-2 py-0.5 rounded text-[10px] font-bold bg-blue-100 text-blue-800';
+            else badge.className = 'px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-800';
+
+            const cancelBox = document.getElementById('dtl-cancel-box');
+            if (t.status === 'CANCELLED') {
+                cancelBox.classList.remove('hidden');
+                document.getElementById('dtl-cancel-reason').innerText = t.cancel_reason || 'Dibatalkan oleh operator';
+            } else {
+                cancelBox.classList.add('hidden');
+            }
+
+            const tbody = document.getElementById('dtl-items-tbody');
+            tbody.innerHTML = '';
+            (t.items || []).forEach(item => {
+                const tr = document.createElement('tr');
+                tr.className = 'border-b border-slate-100';
+                tr.innerHTML = `
+                    <td class="p-2.5 font-sans">
+                        <span class="font-bold text-slate-800 block">${escapeHtml(item.product_name)}</span>
+                        <span class="text-slate-400 font-mono text-[10px]">${escapeHtml(item.product_id)}</span>
+                    </td>
+                    <td class="p-2.5 font-mono text-indigo-700">${escapeHtml(item.batch_code || '-')}</td>
+                    <td class="p-2.5 text-center font-mono text-slate-600">${item.expired_date ? item.expired_date.split('T')[0] : '-'}</td>
+                    <td class="p-2.5 text-right font-bold text-blue-700">${item.sent_quantity}</td>
+                    <td class="p-2.5 text-right font-bold text-emerald-600">${item.received_quantity || 0}</td>
+                    <td class="p-2.5 text-right font-bold ${item.discrepancy_quantity > 0 ? 'text-rose-600' : 'text-slate-400'}">
+                        ${item.discrepancy_quantity > 0 ? '-' + item.discrepancy_quantity : '0'}
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+
+            openModal('modal-transfer-detail');
+        }
+    } catch (err) {
+        showToast('Gagal memuat detail transfer: ' + err.message, 'error');
+    }
+}
+
+function printCurrentTransferDetail() {
+    if (!currentActiveTransfer) {
+        showToast('Muat rincian transfer terlebih dahulu.', 'warning');
+        return;
+    }
+    if (typeof printTransferDocument === 'function') {
+        printTransferDocument(currentActiveTransfer);
+    } else {
+        showToast('Modul cetak dokumen belum siap.', 'error');
     }
 }
 

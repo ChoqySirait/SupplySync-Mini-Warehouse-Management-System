@@ -14,11 +14,14 @@ SET time_zone = '+07:00';
 SET foreign_key_checks = 0;
 
 -- Drop existing tables to ensure clean initialization if re-run
+DROP TABLE IF EXISTS `stock_transfer_items`;
+DROP TABLE IF EXISTS `stock_transfers`;
 DROP TABLE IF EXISTS `stock_transaction_items`;
 DROP TABLE IF EXISTS `stock_transactions`;
 DROP TABLE IF EXISTS `stock_opname`;
 DROP TABLE IF EXISTS `inventory_batches`;
 DROP TABLE IF EXISTS `warehouse_locations`;
+DROP TABLE IF EXISTS `warehouse_facilities`;
 DROP TABLE IF EXISTS `products`;
 DROP TABLE IF EXISTS `suppliers`;
 DROP TABLE IF EXISTS `categories`;
@@ -69,10 +72,29 @@ CREATE TABLE `suppliers` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- --------------------------------------------------------------------
--- 4. TABEL LOKASI RAK / BIN GUDANG (warehouse_locations)
+-- 4. TABEL FASILITAS GUDANG / CABANG (warehouse_facilities)
+-- --------------------------------------------------------------------
+CREATE TABLE `warehouse_facilities` (
+    `facility_id` INT AUTO_INCREMENT PRIMARY KEY,
+    `facility_code` VARCHAR(50) NOT NULL UNIQUE,
+    `facility_name` VARCHAR(150) NOT NULL,
+    `facility_type` ENUM('CENTRAL_HUB', 'COLD_STORAGE', 'REGIONAL_DC', 'RETAIL_BUFFER') NOT NULL DEFAULT 'REGIONAL_DC',
+    `address` TEXT DEFAULT NULL,
+    `city` VARCHAR(100) NOT NULL DEFAULT 'Jakarta',
+    `contact_number` VARCHAR(50) DEFAULT NULL,
+    `is_active` BOOLEAN NOT NULL DEFAULT TRUE,
+    `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX `idx_facility_code` (`facility_code`),
+    INDEX `idx_facility_type` (`facility_type`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------------------
+-- 5. TABEL LOKASI RAK / BIN GUDANG (warehouse_locations)
 -- --------------------------------------------------------------------
 CREATE TABLE `warehouse_locations` (
     `location_id` INT AUTO_INCREMENT PRIMARY KEY,
+    `facility_id` INT NOT NULL DEFAULT 1,
     `location_code` VARCHAR(50) NOT NULL UNIQUE,
     `zone_name` VARCHAR(100) NOT NULL,
     `aisle` VARCHAR(20) NOT NULL,
@@ -82,6 +104,11 @@ CREATE TABLE `warehouse_locations` (
     `description` VARCHAR(255) DEFAULT NULL,
     `is_active` BOOLEAN NOT NULL DEFAULT TRUE,
     `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT `fk_locations_facility` FOREIGN KEY (`facility_id`) 
+        REFERENCES `warehouse_facilities` (`facility_id`) 
+        ON UPDATE CASCADE 
+        ON DELETE RESTRICT,
+    INDEX `idx_location_facility` (`facility_id`),
     INDEX `idx_location_zone` (`zone_name`),
     INDEX `idx_location_code` (`location_code`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -140,14 +167,14 @@ CREATE TABLE `inventory_batches` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- --------------------------------------------------------------------
--- 7. TABEL AUDIT LOG TRANSAKSI MUTASI STOK (stock_transactions)
+-- 8. TABEL AUDIT LOG TRANSAKSI MUTASI STOK (stock_transactions)
 -- --------------------------------------------------------------------
 CREATE TABLE `stock_transactions` (
     `transaction_id` INT AUTO_INCREMENT PRIMARY KEY,
     `reference_no` VARCHAR(100) DEFAULT NULL,
     `product_id` VARCHAR(50) NOT NULL,
     `user_id` INT DEFAULT NULL,
-    `transaction_type` ENUM('IN', 'OUT', 'DISPOSAL', 'ADJUSTMENT') NOT NULL,
+    `transaction_type` ENUM('IN', 'OUT', 'DISPOSAL', 'ADJUSTMENT', 'TRANSFER_OUT', 'TRANSFER_IN') NOT NULL,
     `quantity` INT NOT NULL,
     `notes` TEXT DEFAULT NULL,
     `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -166,7 +193,7 @@ CREATE TABLE `stock_transactions` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- --------------------------------------------------------------------
--- 8. TABEL RINCIAN ALOKASI BATCH TRANSAKSI (stock_transaction_items)
+-- 9. TABEL RINCIAN ALOKASI BATCH TRANSAKSI (stock_transaction_items)
 -- --------------------------------------------------------------------
 CREATE TABLE `stock_transaction_items` (
     `item_id` INT AUTO_INCREMENT PRIMARY KEY,
@@ -186,7 +213,82 @@ CREATE TABLE `stock_transaction_items` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- --------------------------------------------------------------------
--- 9. TABEL REKONSILIASI STOK OPNAME (stock_opname)
+-- 10. TABEL PERINTAH TRANSFER STOK ANTAR-GUDANG (stock_transfers)
+-- --------------------------------------------------------------------
+CREATE TABLE `stock_transfers` (
+    `transfer_id` INT AUTO_INCREMENT PRIMARY KEY,
+    `transfer_number` VARCHAR(100) NOT NULL UNIQUE,
+    `source_facility_id` INT NOT NULL,
+    `destination_facility_id` INT NOT NULL,
+    `status` ENUM('DRAFT', 'IN_TRANSIT', 'RECEIVED', 'PARTIALLY_RECEIVED', 'CANCELLED') NOT NULL DEFAULT 'IN_TRANSIT',
+    `total_sent_quantity` INT NOT NULL DEFAULT 0,
+    `total_received_quantity` INT NOT NULL DEFAULT 0,
+    `sent_by` INT DEFAULT NULL,
+    `received_by` INT DEFAULT NULL,
+    `sent_at` TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+    `received_at` TIMESTAMP NULL DEFAULT NULL,
+    `notes` TEXT DEFAULT NULL,
+    `cancel_reason` VARCHAR(255) DEFAULT NULL,
+    `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT `fk_transfer_source` FOREIGN KEY (`source_facility_id`) 
+        REFERENCES `warehouse_facilities` (`facility_id`) 
+        ON UPDATE CASCADE 
+        ON DELETE RESTRICT,
+    CONSTRAINT `fk_transfer_dest` FOREIGN KEY (`destination_facility_id`) 
+        REFERENCES `warehouse_facilities` (`facility_id`) 
+        ON UPDATE CASCADE 
+        ON DELETE RESTRICT,
+    CONSTRAINT `fk_transfer_sender` FOREIGN KEY (`sent_by`) 
+        REFERENCES `users` (`user_id`) 
+        ON UPDATE CASCADE 
+        ON DELETE SET NULL,
+    CONSTRAINT `fk_transfer_receiver` FOREIGN KEY (`received_by`) 
+        REFERENCES `users` (`user_id`) 
+        ON UPDATE CASCADE 
+        ON DELETE SET NULL,
+    CONSTRAINT `chk_transfer_facilities` CHECK (`source_facility_id` != `destination_facility_id`),
+    INDEX `idx_transfer_status` (`status`),
+    INDEX `idx_transfer_source` (`source_facility_id`),
+    INDEX `idx_transfer_dest` (`destination_facility_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------------------
+-- 11. TABEL RINCIAN BATCH TRANSFER ANTAR-GUDANG (stock_transfer_items)
+-- --------------------------------------------------------------------
+CREATE TABLE `stock_transfer_items` (
+    `item_id` INT AUTO_INCREMENT PRIMARY KEY,
+    `transfer_id` INT NOT NULL,
+    `product_id` VARCHAR(50) NOT NULL,
+    `source_batch_id` INT NOT NULL,
+    `destination_batch_id` INT DEFAULT NULL,
+    `source_location_id` INT DEFAULT NULL,
+    `destination_location_id` INT DEFAULT NULL,
+    `batch_code` VARCHAR(50) DEFAULT NULL,
+    `expired_date` DATE NOT NULL,
+    `sent_quantity` INT NOT NULL,
+    `received_quantity` INT NOT NULL DEFAULT 0,
+    `discrepancy_quantity` INT NOT NULL DEFAULT 0,
+    `discrepancy_reason` VARCHAR(255) DEFAULT NULL,
+    `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT `fk_trf_item_transfer` FOREIGN KEY (`transfer_id`) 
+        REFERENCES `stock_transfers` (`transfer_id`) 
+        ON DELETE CASCADE,
+    CONSTRAINT `fk_trf_item_product` FOREIGN KEY (`product_id`) 
+        REFERENCES `products` (`product_id`) 
+        ON UPDATE CASCADE 
+        ON DELETE RESTRICT,
+    CONSTRAINT `fk_trf_item_batch` FOREIGN KEY (`source_batch_id`) 
+        REFERENCES `inventory_batches` (`batch_id`) 
+        ON DELETE RESTRICT,
+    CONSTRAINT `chk_trf_sent_qty` CHECK (`sent_quantity` > 0),
+    CONSTRAINT `chk_trf_recv_qty` CHECK (`received_quantity` >= 0),
+    INDEX `idx_trf_item_transfer` (`transfer_id`),
+    INDEX `idx_trf_item_product` (`product_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------------------
+-- 12. TABEL REKONSILIASI STOK OPNAME (stock_opname)
 -- --------------------------------------------------------------------
 CREATE TABLE `stock_opname` (
     `opname_id` INT AUTO_INCREMENT PRIMARY KEY,
@@ -234,13 +336,22 @@ INSERT INTO `suppliers` (`supplier_id`, `supplier_code`, `supplier_name`, `conta
 (2, 'SUP-002', 'PT Salim Ivomas Pratama', 'Dewi Lestari', '0813-9876-5432', 'dewi@salimivomas.com', 'Jl. Tanjung Morawa Km 12'),
 (3, 'SUP-003', 'CV Berkah Unggas Nusantara', 'Rahmat Hidayat', '0852-1122-3344', 'rahmat@unggasnusantara.com', 'Deli Serdang, Sumatera Utara');
 
--- 4. Seed Warehouse Locations
-INSERT INTO `warehouse_locations` (`location_id`, `location_code`, `zone_name`, `aisle`, `rack`, `tier`, `bin`, `description`) VALUES
-(1, 'A-01-01', 'Zona Pakan Kering (Dry Feed)', 'Lorong 1', 'Rak 1', 'Tingkat 1', 'Bin 01', 'Rak lantai dasar untuk pakan broiler starter'),
-(2, 'A-01-02', 'Zona Pakan Kering (Dry Feed)', 'Lorong 1', 'Rak 1', 'Tingkat 2', 'Bin 02', 'Rak tingkat kedua untuk pakan broiler finisher'),
-(3, 'B-02-01', 'Zona Sembako & Minyak', 'Lorong 2', 'Rak 2', 'Tingkat 1', 'Bin 01', 'Area penyimpanan karton minyak goreng premium'),
-(4, 'CR-01-01', 'Cold Storage Freezer -18C', 'Lorong Dingin 1', 'Rak 1', 'Tingkat 1', 'Bin 01', 'Ruang pendingin beku karkas ayam potong higienis'),
-(5, 'C-01-01', 'Zona Bahan Kimia & Biosekuriti', 'Lorong 3', 'Rak 1', 'Tingkat 1', 'Bin 01', 'Penyimpanan desinfektan dan sanitizer lantai');
+-- 4. Seed Warehouse Facilities
+INSERT INTO `warehouse_facilities` (`facility_id`, `facility_code`, `facility_name`, `facility_type`, `address`, `city`, `contact_number`) VALUES
+(1, 'WH-JKT-01', 'Gudang Pusat Cakung', 'CENTRAL_HUB', 'Kawasan Industri Pulogadung & Cakung', 'Jakarta Timur', '021-4601234'),
+(2, 'WH-SBY-01', 'Cold Storage Rungkut', 'COLD_STORAGE', 'Kawasan Industri SIER Rungkut', 'Surabaya', '031-8431234'),
+(3, 'WH-MDN-01', 'Regional DC Belawan', 'REGIONAL_DC', 'Kawasan Industri Medan (KIM) II', 'Medan', '061-6851234');
+
+-- 5. Seed Warehouse Locations (Ditautkan ke Fasilitas Gudang)
+INSERT INTO `warehouse_locations` (`location_id`, `facility_id`, `location_code`, `zone_name`, `aisle`, `rack`, `tier`, `bin`, `description`) VALUES
+(1, 1, 'A-01-01', 'Zona Pakan Kering (Dry Feed)', 'Lorong 1', 'Rak 1', 'Tingkat 1', 'Bin 01', 'Rak lantai dasar untuk pakan broiler starter'),
+(2, 1, 'A-01-02', 'Zona Pakan Kering (Dry Feed)', 'Lorong 1', 'Rak 1', 'Tingkat 2', 'Bin 02', 'Rak tingkat kedua untuk pakan broiler finisher'),
+(3, 1, 'B-02-01', 'Zona Sembako & Minyak', 'Lorong 2', 'Rak 2', 'Tingkat 1', 'Bin 01', 'Area penyimpanan karton minyak goreng premium'),
+(4, 1, 'CR-01-01', 'Cold Storage Freezer -18C', 'Lorong Dingin 1', 'Rak 1', 'Tingkat 1', 'Bin 01', 'Ruang pendingin beku karkas ayam potong higienis'),
+(5, 1, 'C-01-01', 'Zona Bahan Kimia & Biosekuriti', 'Lorong 3', 'Rak 1', 'Tingkat 1', 'Bin 01', 'Penyimpanan desinfektan dan sanitizer lantai'),
+(6, 2, 'SBY-CS-01', 'Zona Cold Storage Surabaya', 'Lorong Beku 1', 'Rak A', 'Tingkat 1', 'Bin 01', 'Cold room penyimpanan karkas ayam Surabaya'),
+(7, 2, 'SBY-DRY-01', 'Zona Dry Buffer Surabaya', 'Lorong Kering 1', 'Rak 1', 'Tingkat 1', 'Bin 01', 'Area buffer pakan ternak regional Jawa Timur'),
+(8, 3, 'MDN-KIM-01', 'Zona Pakan Ternak KIM II', 'Lorong 1', 'Rak 1', 'Tingkat 1', 'Bin 01', 'Gudang distribusi Medan pakan unggas komersil');
 
 -- 5. Seed Products (Lengkap dengan Harga Pokok / Cost Price untuk Valuasi Aset)
 INSERT INTO `products` (`product_id`, `product_name`, `category`, `unit`, `min_stock`, `cost_price`, `description`) VALUES

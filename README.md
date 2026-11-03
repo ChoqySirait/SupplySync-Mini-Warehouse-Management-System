@@ -7,7 +7,7 @@
 ![MySQL](https://img.shields.io/badge/MySQL-v8.0%20InnoDB-blue?style=for-the-badge&logo=mysql)
 ![TailwindCSS](https://img.shields.io/badge/TailwindCSS-v3-38B2AC?style=for-the-badge&logo=tailwind-css)
 ![Chart.js](https://img.shields.io/badge/Chart.js-v4-FF6384?style=for-the-badge&logo=chart.js)
-![Testing](https://img.shields.io/badge/Tests-68%20Passed-success?style=for-the-badge)
+![Testing](https://img.shields.io/badge/Tests-78%20Passed-success?style=for-the-badge)
 ![License](https://img.shields.io/badge/License-MIT-yellow?style=for-the-badge)
 
 ---
@@ -31,6 +31,7 @@ Di industri pergudangan modern, rantai dingin (*cold chain*), dan agribisnis ter
 | **Auto-FEFO Outflow Engine** | Mengurangi stok otomatis dari batch dengan tanggal kedaluwarsa paling dekat menggunakan transaksi atomik MySQL dan penguncian baris (`FOR UPDATE`). Mendukung tiebreaker penerimaan (*received_date*) dan perlindungan terhadap batch kedaluwarsa. | Mencegah kerugian barang busuk/kedaluwarsa di gudang (*zero expired waste*). |
 | **Warehouse Bin/Rack Location & Picking Slip** | Setiap batch ditempatkan pada koordinat fisik gudang (*Zone, Aisle, Rack, Tier, Bin*). Saat barang keluar, sistem menerbitkan **Digital Picking Route Slip** yang dapat dicetak langsung. | Mempercepat waktu pemetikan barang (*picking speed*) dan mencegah salah ambil lokasi. |
 | **Valuasi Aset Inventaris & Eksekutif KPI** | Perhitungan otomatis total nilai valuasi aset stok gudang ($\sum \text{stok} \times \text{HPP}$), *Freshness Health Score* batch (rasio segar vs expired), dan pelacakan produk *Fast-Moving*. | Visibilitas finansial dan kesehatan stok waktu-nyata bagi manajemen pergudangan. |
+| **Multi-Facility & Transfer Antar-Gudang** | Manajemen relokasi stok antar-fasilitas gudang dengan nomor transfer unik, alokasi pengeluaran berbasis FEFO, status *In-Transit* yang terisolasi dari stok aktif, dukungan penerimaan sebagian (*partial receipt*), audit selisih/kerusakan perjalanan, pembatalan atomik, dan cetak Surat Jalan Transfer resmi (A4). | Memungkinkan kendali jaringan distribusi pergudangan berskala multi-cabang/nasional tanpa risiko *phantom inventory*. |
 | **Kartu Stok Persediaan (Stock Card Ledger)** | Laporan kronologis mutasi debit/kredit per SKU dengan saldo awal (*beginning balance*), mutasi masuk, mutasi keluar, penyesuaian opname, dan saldo berjalan (*running balance*). Dilengkapi cetak dokumen fisik format A4 dan ekspor spreadsheet CSV (Excel-ready). | Instrumen audit inventaris utama untuk rekonsiliasi berkala dan pemeriksaan auditor eksternal. |
 | **Audit Integritas Data & Snapshot Backup** | Layanan diagnostik konsistensi saldo master produk vs total batch, deteksi anomali kuantitas negatif, batch yatim, serta pencadangan snapshot otomatis JSON & SQL dump via CLI (`npm run db:backup`, `npm run db:verify`) maupun UI web. | Menjamin keandalan data pergudangan, integritas referensial 100%, serta kepatuhan pemulihan bencana (*Disaster Recovery*). |
 | **Bulk CSV Importer (SKU & Inbound Manifest)** | Impor massal ratusan master SKU dan manifest penerimaan barang via file spreadsheet CSV dengan parser RFC 4180 mandiri, preview interaktif, dan transaksi atomik MySQL. | Menghemat waktu onboarding dan entri data pasokan secara masif (*high operational velocity*). |
@@ -80,6 +81,8 @@ SupplySync-Mini-Warehouse-Management-System/
 │   │   ├── analyticsController.js # Controller Valuasi Aset Inventaris & KPI Kesegaran
 │   │   ├── reportController.js    # Controller Laporan Kartu Stok & Ekspor CSV Spreadsheet
 │   │   ├── systemController.js    # Controller Diagnostik Integritas Data & Cadangan Database
+│   │   ├── facilityController.js  # Controller Manajemen Fasilitas & Cabang Gudang
+│   │   ├── transferController.js  # Controller Surat Jalan & Transfer Antar-Gudang
 │   │   ├── locationController.js  # Controller Manajemen Rak & Bin Gudang
 │   │   ├── productController.js   # Controller SKU, Master Data, & Batch Priorities
 │   │   ├── stockController.js     # Controller Inbound, FEFO Outflow, Disposal, & Audit
@@ -90,7 +93,8 @@ SupplySync-Mini-Warehouse-Management-System/
 │   │   ├── validator.js           # Validasi ketat input angka bulat, format tanggal, & sanitasi teks
 │   │   └── errorHandler.js        # Centralized Error Handling & JSON 404 Handler
 │   ├── services/
-│   │   └── inventoryService.js    # Core Engine: FEFO Allocation Algorithm & Row Locking
+│   │   ├── inventoryService.js    # Core Engine: FEFO Allocation Algorithm & Row Locking
+│   │   └── transferService.js     # Core Engine: Inter-Warehouse Transfers & In-Transit Isolation
 │   ├── utils/
 │   │   ├── backupService.js       # Layanan Evaluasi Integritas Data, Snapshot JSON, & Dump SQL
 │   │   ├── csvParser.js           # RFC 4180 Compliant CSV Parser & Serializer mandiri
@@ -98,8 +102,9 @@ SupplySync-Mini-Warehouse-Management-System/
 │   └── routes/
 │       └── api.js                 # REST API Endpoints Router
 │
-├── tests/                    # AUTOMATED TESTING SUITE (68 Tests / 18 Suites)
+├── tests/                    # AUTOMATED TESTING SUITE (78 Tests / 19 Suites)
 │   ├── fefoEngine.test.js    # Unit test algoritma FEFO & tiebreaker deterministik
+│   ├── transfer.test.js      # Unit test 10 skenario transfer antar-gudang & multi-facility
 │   ├── location.test.js      # Unit test alokasi rak & digital picking slip
 │   ├── auth.test.js          # Unit test RBAC authorization & auth middleware
 │   ├── security.test.js      # Unit test scrypt password hashing & JWT token validation
@@ -304,8 +309,9 @@ Hasil eksekusi:
 ✔ Security Utilities: Password Hashing & JWT (5 pass)
 ✔ WMS Stock Card Ledger & Running Balance Tests (4 pass)
 ✔ Database Integrity Verification & Backup Utilities Tests (7 pass)
+✔ Phase 17: Inter-Warehouse Transfer & Multi-Facility Quality Gate Tests (10 pass)
 ✔ Middleware Input Validator Tests (12 pass)
-ℹ tests 68 | suites 18 | pass 68 | fail 0
+ℹ tests 78 | suites 19 | pass 78 | fail 0
 ```
 
 ---
@@ -323,6 +329,14 @@ Hasil eksekusi:
 | `POST` | `/api/system/backup` | Trigger pencadangan database snapshot (JSON & SQL Dump) ke folder `/backups` | Authenticated / Admin |
 | `GET` | `/api/system/backups` | Ambil daftar riwayat berkas cadangan database yang tersimpan | Authenticated |
 | `GET` | `/api/system/backups/:filename` | Unduh berkas cadangan snapshot spesifik (terproteksi dari path traversal) | Authenticated |
+| `GET` | `/api/facilities` | Ambil seluruh daftar fasilitas/cabang gudang, kapasitas rak, & stok tersimpan | Public |
+| `POST` | `/api/facilities` | Daftarkan fasilitas/cabang gudang baru | `ADMIN` / `MANAGER` |
+| `GET` | `/api/facilities/:id/locations` | Ambil daftar lokasi rak spesifik pada fasilitas tertentu | Public |
+| `GET` | `/api/transfers` | Ambil riwayat transfer antar-gudang (filter status & fasilitas) | Public |
+| `GET` | `/api/transfers/:id` | Ambil rincian lengkap surat transfer antar-gudang & batch item | Public |
+| `POST` | `/api/transfers` | Inisiasi pengiriman transfer stok antar-gudang (*In-Transit status*) | `ADMIN` / `MANAGER` |
+| `POST` | `/api/transfers/:id/receive` | Konfirmasi penerimaan barang di gudang tujuan (support penerimaan sebagian) | `ADMIN` / `MANAGER` |
+| `POST` | `/api/transfers/:id/cancel` | Batalkan pengiriman transfer & kembalikan stok ke batch asal secara atomik | `ADMIN` / `MANAGER` |
 | `GET` | `/api/products` | Ambil semua produk, total stok, HPP, dan status ambang batas | Public |
 | `POST` | `/api/products` | Daftarkan master SKU baru (beserta HPP) | Authenticated |
 | `POST` | `/api/products/import-csv` | Impor massal master SKU produk dari teks/file CSV | Authenticated |
@@ -370,13 +384,14 @@ Hasil eksekusi:
 - [x] Dokumen Logistik Resmi: Bukti Penerimaan Barang (*Goods Receipt Note* / GRN) & Surat Jalan Pengiriman (*Delivery Order* / DO) format A4 siap cetak dengan barcode.
 - [x] Laporan Kartu Stok Persediaan (*Stock Card Ledger Report*) dengan perhitungan saldo berjalan, cetak resmi A4, dan ekspor spreadsheet CSV.
 - [x] Utilitas Audit Integritas Data & Snapshot Cadangan Database (CLI `npm run db:backup` / `npm run db:verify` & REST API).
+- [x] Multi-Facility & Transfer Antar-Gudang (*Inter-Warehouse Transfer*) dengan alokasi FEFO, status *In-Transit*, penerimaan sebagian (*partial receipt*), audit selisih kerusakan, dan Surat Jalan A4.
 - [x] Dukungan Pemindai Barcode Fisik (*USB Handheld Scanner*) pada pencarian inventaris.
 - [x] Dual Ekspor Laporan CSV (Master Inventaris & Audit Trail).
-- [x] Automated Testing Suite (68 Pengujian Unit & Integrasi Lulus 100%).
+- [x] Automated Testing Suite (78 Pengujian Unit & Integrasi Lulus 100%).
 
 ### 🚀 Roadmap Selanjutnya:
-- [ ] Manajemen Multi-Gudang (*Multi-Facility Warehouse Management*).
 - [ ] Modul Purchase Order (PO) & Sales Order (SO) Terintegrasi.
+- [ ] Integrasi IoT Sensor Suhu & Kelembaban Ruang Cold Storage.
 
 ---
 

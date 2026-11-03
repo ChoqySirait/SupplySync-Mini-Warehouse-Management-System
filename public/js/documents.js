@@ -527,11 +527,172 @@ function printStockLedger(data) {
     printWindow.document.close();
 }
 
+/**
+ * Buka jendela cetak Surat Jalan Pemindahan Stok Antar-Gudang (Inter-Warehouse Transfer Order)
+ */
+function printTransferDocument(transfer) {
+    if (!transfer) return;
+
+    const trfNo = transfer.transfer_number || `TRF-${Date.now()}`;
+    const dateStr = transfer.sent_at 
+        ? new Date(transfer.sent_at).toLocaleString('id-ID', { dateStyle: 'full', timeStyle: 'short' })
+        : new Date().toLocaleString('id-ID', { dateStyle: 'full', timeStyle: 'short' });
+    const sourceFacility = transfer.source_facility_name || `Fasilitas #${transfer.source_facility_id}`;
+    const destFacility = transfer.destination_facility_name || `Fasilitas #${transfer.destination_facility_id}`;
+    const sender = transfer.sender_name || 'Staff Logistik';
+    const receiver = transfer.receiver_name || '-';
+    const status = transfer.status || 'IN_TRANSIT';
+
+    const barcodeSvg = typeof generateBarcodeSvg === 'function' 
+        ? generateBarcodeSvg(trfNo, { height: 32, showText: true }) 
+        : `<div style="font-family: monospace; font-weight: bold;">${escDoc(trfNo)}</div>`;
+
+    const printWindow = window.open('', '_blank', 'width=850,height=900');
+    if (!printWindow) {
+        alert('Gagal membuka jendela cetak. Izinkan pop-up pada peramban Anda.');
+        return;
+    }
+
+    let itemsHtml = '';
+    const items = transfer.items || [];
+    if (items.length > 0) {
+        items.forEach((item, idx) => {
+            const disc = item.discrepancy_quantity || 0;
+            const expDate = item.expired_date ? item.expired_date.split('T')[0] : '-';
+            itemsHtml += `
+                <tr style="border-bottom: 1px solid #cbd5e1;">
+                    <td style="padding: 8px; text-align: center;">${idx + 1}</td>
+                    <td style="padding: 8px; font-family: monospace; font-weight: bold; color: #1e40af;">${escDoc(item.product_id)}</td>
+                    <td style="padding: 8px; font-weight: 600;">${escDoc(item.product_name || item.product_id)}</td>
+                    <td style="padding: 8px; font-family: monospace;">${escDoc(item.batch_code || '-')}</td>
+                    <td style="padding: 8px; text-align: center;">${expDate}</td>
+                    <td style="padding: 8px; text-align: right; font-weight: bold;">${item.sent_quantity}</td>
+                    <td style="padding: 8px; text-align: right; font-weight: bold; color: ${item.received_quantity > 0 ? '#059669' : '#64748b'};">${item.received_quantity || 0}</td>
+                    <td style="padding: 8px; text-align: center; color: ${disc > 0 ? '#e11d48' : '#64748b'}; font-weight: ${disc > 0 ? 'bold' : 'normal'};">
+                        ${disc > 0 ? '-' + disc : '0'}
+                        ${item.discrepancy_reason ? `<div style="font-size: 9px; color: #e11d48;">(${escDoc(item.discrepancy_reason)})</div>` : ''}
+                    </td>
+                </tr>
+            `;
+        });
+    } else {
+        itemsHtml = `<tr><td colspan="8" style="padding: 16px; text-align: center; color: #94a3b8;">Tidak ada rincian item transfer.</td></tr>`;
+    }
+
+    printWindow.document.write(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Surat Jalan Transfer - ${escDoc(trfNo)}</title>
+            <style>
+                @page { size: A4 portrait; margin: 12mm; }
+                body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; color: #0f172a; margin: 0; padding: 12px; font-size: 11px; }
+                .sheet { max-width: 800px; margin: 0 auto; }
+                .header-table { width: 100%; border-bottom: 2px solid #0f172a; padding-bottom: 10px; margin-bottom: 12px; }
+                .meta-table { width: 100%; margin-bottom: 14px; border-collapse: collapse; }
+                .meta-table td { padding: 4px 6px; vertical-align: top; }
+                .data-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 11px; }
+                .data-table th { background: #f1f5f9; padding: 8px; border-bottom: 2px solid #cbd5e1; text-transform: uppercase; font-size: 10px; }
+                .signatures { width: 100%; margin-top: 25px; border-collapse: collapse; }
+                .sig-box { width: 33.33%; text-align: center; vertical-align: top; padding: 6px; }
+                .sig-line { margin-top: 55px; border-top: 1px solid #0f172a; width: 80%; margin-left: auto; margin-right: auto; }
+                .badge { padding: 3px 8px; border-radius: 4px; font-weight: bold; font-size: 10px; text-transform: uppercase; border: 1px solid #cbd5e1; }
+            </style>
+        </head>
+        <body onload="window.print()">
+            <div class="sheet">
+                <table class="header-table">
+                    <tr>
+                        <td style="width: 55%;">
+                            <div style="font-size: 18px; font-weight: 900; letter-spacing: -0.5px; color: #4338ca;">SUPPLYSYNC LOGISTICS</div>
+                            <div style="font-size: 11px; font-weight: 700; color: #334155;">SURAT JALAN PEMINDAHAN STOK ANTAR-GUDANG</div>
+                            <div style="font-size: 10px; color: #64748b; margin-top: 2px;">Multi-Facility Inventory Relocation Order</div>
+                        </td>
+                        <td style="width: 45%; text-align: right;">
+                            <div style="display: inline-block;">${barcodeSvg}</div>
+                        </td>
+                    </tr>
+                </table>
+
+                <table class="meta-table" style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px;">
+                    <tr>
+                        <td style="width: 18%; font-weight: bold; color: #64748b;">No. Surat Jalan:</td>
+                        <td style="width: 32%; font-family: monospace; font-weight: bold; font-size: 13px; color: #4338ca;">${escDoc(trfNo)}</td>
+                        <td style="width: 18%; font-weight: bold; color: #64748b;">Tanggal Kirim:</td>
+                        <td style="width: 32%; font-weight: 600;">${dateStr}</td>
+                    </tr>
+                    <tr>
+                        <td style="font-weight: bold; color: #64748b;">Fasilitas Asal:</td>
+                        <td style="font-weight: bold; color: #0f172a;">${escDoc(sourceFacility)}</td>
+                        <td style="font-weight: bold; color: #64748b;">Fasilitas Tujuan:</td>
+                        <td style="font-weight: bold; color: #0f172a;">${escDoc(destFacility)}</td>
+                    </tr>
+                    <tr>
+                        <td style="font-weight: bold; color: #64748b;">Status Transfer:</td>
+                        <td><span class="badge" style="background: #eef2ff; color: #4338ca; border-color: #c7d2fe;">${escDoc(status)}</span></td>
+                        <td style="font-weight: bold; color: #64748b;">Operator Kirim:</td>
+                        <td style="font-weight: 600;">${escDoc(sender)}</td>
+                    </tr>
+                    <tr>
+                        <td style="font-weight: bold; color: #64748b;">Catatan Armada:</td>
+                        <td colspan="3">${escDoc(transfer.notes || '-')}</td>
+                    </tr>
+                </table>
+
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th style="width: 5%;">No</th>
+                            <th style="width: 15%; text-align: left;">SKU Produk</th>
+                            <th style="width: 25%; text-align: left;">Nama Produk</th>
+                            <th style="width: 15%; text-align: left;">Batch Code</th>
+                            <th style="width: 12%; text-align: center;">Tgl Expired</th>
+                            <th style="width: 9%; text-align: right;">Dikirim</th>
+                            <th style="width: 9%; text-align: right;">Diterima</th>
+                            <th style="width: 10%; text-align: center;">Selisih</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${itemsHtml}
+                    </tbody>
+                </table>
+
+                <table class="signatures">
+                    <tr>
+                        <td class="sig-box">
+                            <div style="font-weight: bold;">Gudang Pengirim (Asal)</div>
+                            <div class="sig-line"></div>
+                            <div style="font-size: 10px; color: #64748b;">${escDoc(sender)}</div>
+                        </td>
+                        <td class="sig-box">
+                            <div style="font-weight: bold;">Ekspedisi / Supir Pengangkut</div>
+                            <div class="sig-line"></div>
+                            <div style="font-size: 10px; color: #64748b;">(Tanda Tangan & Nama Terang)</div>
+                        </td>
+                        <td class="sig-box">
+                            <div style="font-weight: bold;">Gudang Penerima (Tujuan)</div>
+                            <div class="sig-line"></div>
+                            <div style="font-size: 10px; color: #64748b;">${escDoc(receiver !== '-' ? receiver : '(Nama Pemeriksa Fisik)')}</div>
+                        </td>
+                    </tr>
+                </table>
+
+                <div style="margin-top: 25px; text-align: center; font-size: 9px; color: #94a3b8; border-top: 1px solid #e2e8f0; padding-top: 6px;">
+                    Dokumen Logistik Resmi SupplySync WMS &bull; Surat Jalan Pemindahan Stok Antar-Gudang Sah Berbasis FEFO & Traceability.
+                </div>
+            </div>
+        </body>
+        </html>
+    `);
+    printWindow.document.close();
+}
+
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = {
         printGoodsReceiptNote,
         printDeliveryOrder,
         printStockLedger,
+        printTransferDocument,
         escDoc
     };
 }

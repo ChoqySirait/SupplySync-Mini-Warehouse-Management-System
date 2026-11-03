@@ -10,9 +10,12 @@ const WMS_TABLES = [
     'users',
     'categories',
     'suppliers',
+    'warehouse_facilities',
     'warehouse_locations',
     'products',
     'inventory_batches',
+    'stock_transfers',
+    'stock_transfer_items',
     'stock_transactions',
     'stock_transaction_items',
     'stock_opname'
