@@ -223,6 +223,7 @@ async function loadDashboardData() {
             fetchLocations(),
             fetchProducts(),
             fetchFifoBatches(),
+            fetchKpiMetrics(),
             loadTransactionLogs(),
             loadOpnameLogs()
         ]);
@@ -309,6 +310,35 @@ async function fetchFifoBatches() {
     }
 }
 
+async function fetchKpiMetrics() {
+    try {
+        const res = await fetch('/api/analytics/kpi');
+        const json = await res.json();
+        if (json.status === 'Success' && json.data) {
+            const data = json.data;
+            const assetEl = document.getElementById('stat-asset-value');
+            if (assetEl) assetEl.innerText = data.formatted_asset_value || 'Rp 0';
+
+            const unitsEl = document.getElementById('stat-active-units');
+            if (unitsEl) unitsEl.innerText = `${data.total_active_units || 0} Unit Tersimpan`;
+
+            const healthEl = document.getElementById('stat-health-score');
+            if (healthEl) {
+                const score = data.freshness_health_score;
+                healthEl.innerText = `${score}%`;
+                healthEl.className = `text-2xl font-black mt-1 tracking-tight ${score >= 90 ? 'text-emerald-600' : score >= 70 ? 'text-amber-600' : 'text-rose-600'}`;
+            }
+
+            const healthSubEl = document.getElementById('stat-health-sub');
+            if (healthSubEl) {
+                healthSubEl.innerText = `${data.fresh_batches || 0} dari ${data.total_batches || 0} batch prima`;
+            }
+        }
+    } catch (e) {
+        console.warn('Gagal memuat metrik KPI:', e);
+    }
+}
+
 // --------------------------------------------------------------------
 // 5. RENDERING TABEL & LOKASI GUDANG
 // --------------------------------------------------------------------
@@ -332,19 +362,24 @@ function renderProductTable(products) {
             statusBadge = `<span class="bg-rose-50 text-rose-700 border border-rose-200 text-[10px] px-2.5 py-1 rounded-full font-semibold">Stok Habis</span>`;
         }
 
+        const costPriceFormatted = item.cost_price ? new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(item.cost_price) : '-';
+
         const tr = document.createElement('tr');
         tr.className = 'hover:bg-slate-50 transition border-b border-slate-100';
         tr.innerHTML = `
             <td class="p-4 font-mono font-bold text-blue-700">${escapeHtml(item.product_id)}</td>
             <td class="p-4">
                 <div class="font-bold text-slate-900">${escapeHtml(item.product_name)}</div>
-                <div class="text-[11px] text-slate-400">${item.active_batches || 0} batch aktif di rak</div>
+                <div class="text-[11px] text-slate-400">${item.active_batches || 0} batch di rak &bull; HPP: ${costPriceFormatted}</div>
             </td>
             <td class="p-4 text-slate-600">${escapeHtml(item.category)}</td>
             <td class="p-4 font-bold text-right ${item.stock_status === 'Low Stock' ? 'text-amber-600' : item.stock_status === 'Out of Stock' ? 'text-rose-600' : 'text-slate-900'}">${item.total_stock}</td>
             <td class="p-4 text-slate-500">${escapeHtml(item.unit)}</td>
             <td class="p-4">${statusBadge}</td>
-            <td class="p-4 text-right space-x-1">
+            <td class="p-4 text-right space-x-1 whitespace-nowrap">
+                <button onclick="printProductSkuLabel('${escapeHtml(item.product_id)}', '${escapeHtml(item.product_name)}', '${escapeHtml(item.category)}', '${escapeHtml(item.unit)}')" class="px-2.5 py-1 text-[11px] font-semibold bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-lg transition" title="Cetak Barcode SKU">
+                    Barcode
+                </button>
                 <button onclick="showBatchDetails('${escapeHtml(item.product_id)}')" class="px-2.5 py-1 text-[11px] font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg transition" title="Lihat rincian batch & lokasi rak">
                     Batch
                 </button>
@@ -377,7 +412,10 @@ function renderLocationsGrid(locations) {
             <div>
                 <div class="flex items-center justify-between mb-2">
                     <span class="font-mono font-black text-sm px-2.5 py-1 rounded-lg bg-blue-50 text-blue-700 border border-blue-200">${escapeHtml(loc.location_code)}</span>
-                    <span class="text-[11px] font-bold text-slate-500">${loc.batch_count || 0} Batch</span>
+                    <button onclick="printWarehouseBinLabel('${escapeHtml(loc.location_code)}', '${escapeHtml(loc.zone_name)}', '${escapeHtml(loc.aisle)}', '${escapeHtml(loc.rack)}', '${escapeHtml(loc.tier)}', '${escapeHtml(loc.bin)}')" class="px-2 py-0.5 text-[10px] font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-md transition flex items-center gap-1" title="Cetak Label Rak Barcode">
+                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/></svg>
+                        Cetak Label
+                    </button>
                 </div>
                 <h4 class="font-bold text-sm text-slate-900">${escapeHtml(loc.zone_name)}</h4>
                 <p class="text-xs text-slate-500 mt-1">${escapeHtml(loc.aisle)} &bull; ${escapeHtml(loc.rack)} &bull; ${escapeHtml(loc.tier)} &bull; ${escapeHtml(loc.bin)}</p>
@@ -385,7 +423,7 @@ function renderLocationsGrid(locations) {
             </div>
             <div class="pt-3 border-t border-slate-100 flex items-center justify-between text-xs">
                 <span class="text-slate-500 font-medium">Total Stok di Bin:</span>
-                <span class="font-bold text-slate-900">${loc.total_stock || 0} Unit</span>
+                <span class="font-bold text-slate-900">${loc.total_stock || 0} Unit (${loc.batch_count || 0} Batch)</span>
             </div>
         `;
         container.appendChild(card);
@@ -630,6 +668,7 @@ async function handleAddProduct(e) {
         category: document.getElementById('prod-category').value.trim(),
         unit: document.getElementById('prod-unit').value.trim(),
         min_stock: parseInt(document.getElementById('prod-min-stock').value, 10) || 10,
+        cost_price: parseFloat(document.getElementById('prod-cost-price')?.value) || 0,
         description: document.getElementById('prod-desc')?.value.trim() || ''
     };
 
@@ -1013,9 +1052,13 @@ function populateCategoryFilter() {
 }
 
 function updateStatCards(products) {
-    document.getElementById('stat-total-products').innerText = products.length;
+    const totalEl = document.getElementById('stat-total-products');
+    if (totalEl) totalEl.innerText = products.length;
     const lowStockCount = products.filter(p => p.stock_status === 'Low Stock' || p.stock_status === 'Out of Stock').length;
-    document.getElementById('stat-low-stock').innerText = lowStockCount;
+    const lowStockEl = document.getElementById('stat-low-stock');
+    if (lowStockEl) lowStockEl.innerText = lowStockCount;
+    const lowStockPill = document.getElementById('stat-low-stock-pill');
+    if (lowStockPill) lowStockPill.innerText = `(${lowStockCount} Kritis)`;
 }
 
 // --------------------------------------------------------------------
@@ -1079,5 +1122,22 @@ function downloadCsvBlob(csvContent, filename) {
     document.body.removeChild(link);
 }
 
-// Inisialisasi saat DOM siap
-document.addEventListener('DOMContentLoaded', loadDashboardData);
+// Inisialisasi saat DOM siap & Pasang Barcode Scanner Event Listener
+document.addEventListener('DOMContentLoaded', () => {
+    loadDashboardData();
+
+    // Integrasi Barcode Scanner Fisik (USB Handheld) ke input pencarian
+    const searchInput = document.getElementById('search-input');
+    if (searchInput) {
+        searchInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                const val = searchInput.value.trim().toUpperCase();
+                const matched = currentProducts.find(p => p.product_id.toUpperCase() === val);
+                if (matched) {
+                    showToast(`Barcode SKU ${matched.product_id} terdeteksi! Membuka rincian...`, 'info');
+                    showBatchDetails(matched.product_id);
+                }
+            }
+        });
+    }
+});

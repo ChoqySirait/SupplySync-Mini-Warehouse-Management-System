@@ -12,10 +12,12 @@ exports.getAllProducts = async (req, res) => {
                 p.category,
                 p.unit,
                 p.min_stock,
+                p.cost_price,
                 p.description,
                 p.is_active,
                 p.created_at,
                 COALESCE(SUM(CASE WHEN b.quantity > 0 THEN b.quantity ELSE 0 END), 0) AS total_stock,
+                (COALESCE(SUM(CASE WHEN b.quantity > 0 THEN b.quantity ELSE 0 END), 0) * COALESCE(p.cost_price, 0)) AS subtotal_asset_value,
                 COUNT(CASE WHEN b.quantity > 0 THEN b.batch_id ELSE NULL END) AS active_batches,
                 MIN(CASE WHEN b.quantity > 0 THEN b.expired_date ELSE NULL END) AS nearest_expiration,
                 CASE 
@@ -40,7 +42,7 @@ exports.getAllProducts = async (req, res) => {
         }
 
         query += `
-            GROUP BY p.product_id, p.product_name, p.category, p.unit, p.min_stock, p.description, p.is_active, p.created_at
+            GROUP BY p.product_id, p.product_name, p.category, p.unit, p.min_stock, p.cost_price, p.description, p.is_active, p.created_at
         `;
 
         if (status) {
@@ -137,7 +139,7 @@ exports.getProductBatches = async (req, res) => {
 exports.createProduct = async (req, res) => {
     try {
         const payload = req.validatedBody || req.body;
-        const { product_id, product_name, category, unit, min_stock, description } = payload;
+        const { product_id, product_name, category, unit, min_stock, cost_price, description } = payload;
 
         // Cek Duplikasi SKU
         const [existing] = await db.query('SELECT product_id FROM products WHERE product_id = ?', [product_id]);
@@ -150,15 +152,15 @@ exports.createProduct = async (req, res) => {
 
         // Simpan Ke MySQL
         await db.query(
-            `INSERT INTO products (product_id, product_name, category, min_stock, unit, description) 
-             VALUES (?, ?, ?, ?, ?, ?)`,
-            [product_id, product_name, category, min_stock || 10, unit, description || null]
+            `INSERT INTO products (product_id, product_name, category, min_stock, unit, cost_price, description) 
+             VALUES (?, ?, ?, ?, ?, ?, ?)`,
+            [product_id, product_name, category, min_stock || 10, unit, parseFloat(cost_price) || 0.00, description || null]
         );
 
         res.status(201).json({ 
             status: 'Success', 
             message: `Produk '${product_name}' (${product_id}) berhasil didaftarkan ke katalog master gudang!`,
-            data: { product_id, product_name, category, unit, min_stock }
+            data: { product_id, product_name, category, unit, min_stock, cost_price: parseFloat(cost_price) || 0.00 }
         });
 
     } catch (error) {
@@ -171,7 +173,7 @@ exports.createProduct = async (req, res) => {
 exports.updateProduct = async (req, res) => {
     try {
         const { id } = req.params;
-        const { product_name, category, unit, min_stock, description } = req.body;
+        const { product_name, category, unit, min_stock, cost_price, description } = req.body;
 
         const [existing] = await db.query('SELECT product_id FROM products WHERE product_id = ?', [id]);
         if (!existing || existing.length === 0) {
@@ -184,9 +186,10 @@ exports.updateProduct = async (req, res) => {
                 category = COALESCE(?, category),
                 unit = COALESCE(?, unit),
                 min_stock = COALESCE(?, min_stock),
+                cost_price = COALESCE(?, cost_price),
                 description = COALESCE(?, description)
              WHERE product_id = ?`,
-            [product_name || null, category || null, unit || null, min_stock !== undefined ? parseInt(min_stock, 10) : null, description || null, id]
+            [product_name || null, category || null, unit || null, min_stock !== undefined ? parseInt(min_stock, 10) : null, cost_price !== undefined ? parseFloat(cost_price) : null, description || null, id]
         );
 
         res.json({ status: 'Success', message: `Data master produk '${id}' berhasil diperbarui!` });

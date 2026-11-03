@@ -27,7 +27,7 @@ function isNonNegativeInteger(val) {
 
 // 1. Validasi Input Produk Baru
 exports.validateProduct = (req, res, next) => {
-    let { product_id, product_name, category, unit, min_stock, description } = req.body;
+    let { product_id, product_name, category, unit, min_stock, cost_price, description } = req.body;
 
     product_id = sanitizeString(product_id).toUpperCase();
     product_name = sanitizeString(product_name);
@@ -70,12 +70,15 @@ exports.validateProduct = (req, res, next) => {
         });
     }
 
+    const parsedCostPrice = cost_price !== undefined && cost_price !== '' ? parseFloat(cost_price) : 0;
+
     req.validatedBody = {
         product_id,
         product_name,
         category,
         unit,
         min_stock: parsedMinStock,
+        cost_price: parsedCostPrice >= 0 ? parsedCostPrice : 0,
         description: sanitizeString(description)
     };
 

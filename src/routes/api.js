@@ -7,6 +7,7 @@ const supplierController = require('../controllers/supplierController');
 const categoryController = require('../controllers/categoryController');
 const locationController = require('../controllers/locationController');
 const authController = require('../controllers/authController');
+const analyticsController = require('../controllers/analyticsController');
 
 const validator = require('../middlewares/validator');
 const { authenticateToken, optionalAuth, authorizeRole } = require('../middlewares/authMiddleware');
@@ -15,6 +16,9 @@ const { authenticateToken, optionalAuth, authorizeRole } = require('../middlewar
 router.post('/auth/login', authController.login);
 router.get('/auth/me', authenticateToken, authController.getMe);
 router.get('/auth/users', authController.getAllUsers);
+
+// 2. Routes Eksekutif Analitik & Valuasi Aset KPI
+router.get('/analytics/kpi', analyticsController.getKpiSummary);
 
 // 2. Routes Produk, SKU & Batch Alokasi
 router.get('/products', productController.getAllProducts);

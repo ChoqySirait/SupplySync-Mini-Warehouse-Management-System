@@ -95,6 +95,7 @@ CREATE TABLE `products` (
     `category` VARCHAR(100) NOT NULL,
     `unit` VARCHAR(50) NOT NULL DEFAULT 'Pcs',
     `min_stock` INT NOT NULL DEFAULT 10,
+    `cost_price` DECIMAL(15, 2) NOT NULL DEFAULT 0.00,
     `description` TEXT DEFAULT NULL,
     `is_active` BOOLEAN NOT NULL DEFAULT TRUE,
     `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -241,13 +242,13 @@ INSERT INTO `warehouse_locations` (`location_id`, `location_code`, `zone_name`, 
 (4, 'CR-01-01', 'Cold Storage Freezer -18C', 'Lorong Dingin 1', 'Rak 1', 'Tingkat 1', 'Bin 01', 'Ruang pendingin beku karkas ayam potong higienis'),
 (5, 'C-01-01', 'Zona Bahan Kimia & Biosekuriti', 'Lorong 3', 'Rak 1', 'Tingkat 1', 'Bin 01', 'Penyimpanan desinfektan dan sanitizer lantai');
 
--- 5. Seed Products
-INSERT INTO `products` (`product_id`, `product_name`, `category`, `unit`, `min_stock`, `description`) VALUES
-('PRD-FEED-01', 'Pakan Broiler Starter (511)', 'Pakan Ternak (Feed)', 'Sak 50Kg', 20, 'Pakan ayam pedaging fase starter umur 1-21 hari'),
-('PRD-FEED-02', 'Pakan Broiler Finisher (512)', 'Pakan Ternak (Feed)', 'Sak 50Kg', 15, 'Pakan ayam pedaging fase finisher hingga panen'),
-('PRD-OIL-01', 'Minyak Goreng Sawit Premium 2L', 'Sembako & Pangan', 'Karton', 25, 'Minyak nabati kemasan pouch 2 liter isi 6 pouch/karton'),
-('PRD-MEAT-01', 'Daging Ayam Karkas Frozen 1.0 - 1.2 Kg', 'Produk Olahan Daging (Cold Chain)', 'Kg', 50, 'Ayam beku utuh higienis bersertifikasi halal'),
-('PRD-SAN-01', 'Desinfektan Biosekuriti Gudang 5L', 'Bahan Kimia & Pembersih', 'Jerigen', 10, 'Formula desinfektan spektrum luas untuk sanitasi lantai gudang');
+-- 5. Seed Products (Lengkap dengan Harga Pokok / Cost Price untuk Valuasi Aset)
+INSERT INTO `products` (`product_id`, `product_name`, `category`, `unit`, `min_stock`, `cost_price`, `description`) VALUES
+('PRD-FEED-01', 'Pakan Broiler Starter (511)', 'Pakan Ternak (Feed)', 'Sak 50Kg', 20, 450000.00, 'Pakan ayam pedaging fase starter umur 1-21 hari'),
+('PRD-FEED-02', 'Pakan Broiler Finisher (512)', 'Pakan Ternak (Feed)', 'Sak 50Kg', 15, 475000.00, 'Pakan ayam pedaging fase finisher hingga panen'),
+('PRD-OIL-01', 'Minyak Goreng Sawit Premium 2L', 'Sembako & Pangan', 'Karton', 25, 95000.00, 'Minyak nabati kemasan pouch 2 liter isi 6 pouch/karton'),
+('PRD-MEAT-01', 'Daging Ayam Karkas Frozen 1.0 - 1.2 Kg', 'Produk Olahan Daging (Cold Chain)', 'Kg', 50, 38000.00, 'Ayam beku utuh higienis bersertifikasi halal'),
+('PRD-SAN-01', 'Desinfektan Biosekuriti Gudang 5L', 'Bahan Kimia & Pembersih', 'Jerigen', 10, 125000.00, 'Formula desinfektan spektrum luas untuk sanitasi lantai gudang');
 
 -- 6. Seed Batches (Ditautkan ke Lokasi Gudang)
 INSERT INTO `inventory_batches` (`batch_id`, `batch_code`, `product_id`, `supplier_id`, `location_id`, `initial_quantity`, `quantity`, `expired_date`, `received_date`, `notes`) VALUES
