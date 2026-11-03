@@ -1,4 +1,5 @@
 const db = require('../config/database');
+const { parseCsvToObjects } = require('../utils/csvParser');
 
 // 1. Ambil Semua Produk + Total Stok Gabungan & Status Ambang Batas
 exports.getAllProducts = async (req, res) => {
@@ -221,5 +222,113 @@ exports.deleteProduct = async (req, res) => {
     } catch (error) {
         console.error('❌ Error deleteProduct:', error.message);
         res.status(500).json({ status: 'Error', message: error.message });
+    }
+};
+
+// 7. Impor Massal Master Produk dari CSV (Bulk CSV Import)
+exports.importProductsCsv = async (req, res) => {
+    let connection;
+    try {
+        const csvData = req.body.csv_data || (typeof req.body === 'string' ? req.body : '');
+        if (!csvData || typeof csvData !== 'string' || csvData.trim().length === 0) {
+            return res.status(400).json({
+                status: 'Error',
+                message: 'Data teks CSV tidak boleh kosong.'
+            });
+        }
+
+        const rows = parseCsvToObjects(csvData);
+        if (rows.length === 0) {
+            return res.status(400).json({
+                status: 'Error',
+                message: 'File CSV tidak berisi baris data yang valid atau format header salah.'
+            });
+        }
+
+        connection = await db.getConnection();
+        await connection.beginTransaction();
+
+        let insertedCount = 0;
+        let updatedCount = 0;
+        const errors = [];
+
+        for (let i = 0; i < rows.length; i++) {
+            const row = rows[i];
+            const rowNum = i + 2; // Baris 1 adalah header
+
+            const rawId = row.product_id || row.sku || row.id || row.kode_produk;
+            const rawName = row.product_name || row.name || row.nama || row.nama_produk;
+            const rawCategory = row.category || row.kategori || 'Umum';
+            const rawUnit = row.unit || row.satuan || 'Pcs';
+            const rawMinStock = row.min_stock || row.safety_stock || row.batas_minimum;
+            const rawCostPrice = row.cost_price || row.hpp || row.harga_pokok || row.harga;
+            const rawDesc = row.description || row.deskripsi || row.catatan || '';
+
+            if (!rawId || String(rawId).trim().length < 2) {
+                errors.push({ row: rowNum, error: 'SKU / ID Produk wajib diisi minimal 2 karakter.' });
+                continue;
+            }
+
+            if (!rawName || String(rawName).trim().length < 2) {
+                errors.push({ row: rowNum, sku: rawId, error: 'Nama produk wajib diisi minimal 2 karakter.' });
+                continue;
+            }
+
+            const productId = String(rawId).trim().toUpperCase();
+            const productName = String(rawName).trim();
+            const category = String(rawCategory).trim();
+            const unit = String(rawUnit).trim();
+            const minStock = Math.max(0, parseInt(rawMinStock, 10) || 10);
+            const costPrice = Math.max(0, parseFloat(rawCostPrice) || 0);
+            const description = String(rawDesc).trim();
+
+            const [existing] = await connection.query(
+                `SELECT product_id FROM products WHERE product_id = ?`,
+                [productId]
+            );
+
+            if (existing && existing.length > 0) {
+                await connection.query(
+                    `UPDATE products SET 
+                        product_name = ?,
+                        category = ?,
+                        unit = ?,
+                        min_stock = ?,
+                        cost_price = ?,
+                        description = ?,
+                        is_active = 1
+                     WHERE product_id = ?`,
+                    [productName, category, unit, minStock, costPrice, description, productId]
+                );
+                updatedCount++;
+            } else {
+                await connection.query(
+                    `INSERT INTO products (product_id, product_name, category, unit, min_stock, cost_price, description, is_active)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, 1)`,
+                    [productId, productName, category, unit, minStock, costPrice, description]
+                );
+                insertedCount++;
+            }
+        }
+
+        await connection.commit();
+
+        res.json({
+            status: 'Success',
+            message: `Impor massal selesai: ${insertedCount} SKU baru ditambahkan, ${updatedCount} SKU diperbarui.${errors.length > 0 ? ` (${errors.length} baris dilewati karena format tidak valid)` : ''}`,
+            data: {
+                total_rows: rows.length,
+                inserted: insertedCount,
+                updated: updatedCount,
+                errors
+            }
+        });
+
+    } catch (error) {
+        if (connection) await connection.rollback();
+        console.error('❌ Error importProductsCsv:', error.message);
+        res.status(500).json({ status: 'Error', message: error.message });
+    } finally {
+        if (connection) connection.release();
     }
 };

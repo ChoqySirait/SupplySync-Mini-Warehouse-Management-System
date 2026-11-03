@@ -23,6 +23,7 @@ router.get('/analytics/kpi', analyticsController.getKpiSummary);
 // 2. Routes Produk, SKU & Batch Alokasi
 router.get('/products', productController.getAllProducts);
 router.post('/products', optionalAuth, validator.validateProduct, productController.createProduct);
+router.post('/products/import-csv', optionalAuth, productController.importProductsCsv);
 router.put('/products/:id', optionalAuth, productController.updateProduct);
 router.delete('/products/:id', optionalAuth, authorizeRole('ADMIN'), productController.deleteProduct);
 router.get('/products/:id/batches', productController.getProductBatches);
@@ -33,6 +34,7 @@ router.get('/batches/fefo', productController.getFifoBatches);
 
 // 3. Routes Mutasi Stok, Alokasi FEFO & Operasional Gudang
 router.post('/stock/in', optionalAuth, validator.validateStockIn, stockController.addStockBatch);
+router.post('/stock/in/import-csv', optionalAuth, stockController.importStockInboundCsv);
 router.post('/stock/out', optionalAuth, validator.validateStockOut, stockController.reduceStockFifo);
 router.post('/stock/disposal', optionalAuth, validator.validateStockDisposal, stockController.adjustStockDisposal);
 router.post('/stock/opname', optionalAuth, validator.validateStockOpname, stockController.recordStockOpname);

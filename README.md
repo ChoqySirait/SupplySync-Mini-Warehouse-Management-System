@@ -31,6 +31,8 @@ Di industri pergudangan modern, rantai dingin (*cold chain*), dan agribisnis ter
 | **Auto-FEFO Outflow Engine** | Mengurangi stok otomatis dari batch dengan tanggal kedaluwarsa paling dekat menggunakan transaksi atomik MySQL dan penguncian baris (`FOR UPDATE`). Mendukung tiebreaker penerimaan (*received_date*) dan perlindungan terhadap batch kedaluwarsa. | Mencegah kerugian barang busuk/kedaluwarsa di gudang (*zero expired waste*). |
 | **Warehouse Bin/Rack Location & Picking Slip** | Setiap batch ditempatkan pada koordinat fisik gudang (*Zone, Aisle, Rack, Tier, Bin*). Saat barang keluar, sistem menerbitkan **Digital Picking Route Slip** yang dapat dicetak langsung. | Mempercepat waktu pemetikan barang (*picking speed*) dan mencegah salah ambil lokasi. |
 | **Valuasi Aset Inventaris & Eksekutif KPI** | Perhitungan otomatis total nilai valuasi aset stok gudang ($\sum \text{stok} \times \text{HPP}$), *Freshness Health Score* batch (rasio segar vs expired), dan pelacakan produk *Fast-Moving*. | Visibilitas finansial dan kesehatan stok waktu-nyata bagi manajemen pergudangan. |
+| **Bulk CSV Importer (SKU & Inbound Manifest)** | Impor massal ratusan master SKU dan manifest penerimaan barang via file spreadsheet CSV dengan parser RFC 4180 mandiri, preview interaktif, dan transaksi atomik MySQL. | Menghemat waktu onboarding dan entri data pasokan secara masif (*high operational velocity*). |
+| **Dokumen Logistik Resmi (GRN & DO)** | Penerbitan otomatis **Bukti Penerimaan Barang (*Goods Receipt Note*)** dan **Surat Jalan Pengiriman (*Delivery Order*)** siap cetak A4 lengkap dengan barcode Code 39 dan 3 kolom tanda tangan resmi. | Keabsahan legal dan akuntabilitas serah terima barang antar pihak ekspedisi, gudang, dan pelanggan. |
 | **Barcode Generator & Cetak Stiker Termal** | Mesin pembuat barcode vektor SVG mandiri (Code 39) untuk pencetakan label stiker rak (*Bin Location Tag*) dan stiker SKU produk tanpa dependensi eksternal. Mendukung *keyboard scanner* fisik. | Mempercepat identifikasi fisik barang di rak dan otomatisasi pemindaian di lantai gudang. |
 | **Autentikasi & RBAC (Role-Based Access Control)** | Sistem login berbasis token JWT (HMAC-SHA256) dengan pembagian peran (`ADMIN`, `MANAGER`, `STAFF`) dan hashing kata sandi aman (`crypto.scrypt`). | Menjamin kontrol akses terotorisasi dan akuntabilitas operator pada audit trail. |
 | **Batch Traceability Per-Item** | Rincian pemotongan batch dicatat di tabel relasi `stock_transaction_items`, sehingga mutasi 100 unit yang memotong 3 batch berbeda tetap terlacak secara presisi. | Transparansi audit alur fisik barang dari penerimaan hingga pengiriman. |
@@ -61,6 +63,7 @@ SupplySync-Mini-Warehouse-Management-System/
 │   ├── js/
 │   │   ├── main.js           # Client Logic, Fetch API, XSS Escaping, Modal, Toast, & Chart
 │   │   ├── barcode.js        # SVG Barcode Generator (Code 39) & Label Cetak Stiker Gudang
+│   │   ├── documents.js      # Generator Bukti Penerimaan Barang (GRN) & Surat Jalan (DO)
 │   │   └── dashboard.js      # Pintasan Keyboard (Ctrl+K untuk pencarian cepat)
 │   └── index.html            # Layout Dashboard Enterprise & Modals
 │
@@ -82,17 +85,20 @@ SupplySync-Mini-Warehouse-Management-System/
 │   ├── services/
 │   │   └── inventoryService.js    # Core Engine: FEFO Allocation Algorithm & Row Locking
 │   ├── utils/
+│   │   ├── csvParser.js           # RFC 4180 Compliant CSV Parser & Serializer mandiri
 │   │   └── security.js            # Standalone JWT Sign/Verify & Scrypt Password Hasher
 │   └── routes/
 │       └── api.js                 # REST API Endpoints Router
 │
-├── tests/                    # AUTOMATED TESTING SUITE (47 Tests / 14 Suites)
+├── tests/                    # AUTOMATED TESTING SUITE (56 Tests / 16 Suites)
 │   ├── fefoEngine.test.js    # Unit test algoritma FEFO & tiebreaker deterministik
 │   ├── location.test.js      # Unit test alokasi rak & digital picking slip
 │   ├── auth.test.js          # Unit test RBAC authorization & auth middleware
 │   ├── security.test.js      # Unit test scrypt password hashing & JWT token validation
 │   ├── analytics.test.js     # Unit test formula valuasi aset stok & health score
 │   ├── barcode.test.js       # Unit test SVG barcode generator & sanitasi input
+│   ├── csvParser.test.js     # Unit test parser RFC 4180 CSV & handling quoted text
+│   ├── import.test.js        # Unit test validasi manifest inbound & bulk import logic
 │   ├── validator.test.js     # Unit test validasi input & boundary values
 │   ├── referenceNumber.test.js # Unit test generator nomor transaksi
 │   └── app.test.js           # Integration test security headers, routing 404, & Express app
@@ -267,6 +273,8 @@ npm test
 - **Alokasi Lokasi Rak & Rute Petik / Picking Slip (2 tests)**: Penentuan koordinat rak lorong dan alokasi multi-lokasi.
 - **Generator Nomor Referensi (4 tests)**: Pola referensi unik transaksi `TRX-IN-...`, `TRX-OUT-...`, `TRX-DISP-...`.
 - **Middleware Input Validator (12 tests)**: Validasi SKU, nama produk, batas stok minimum, validasi bilangan bulat positif, format tanggal ISO, alasan afkir, stock opname.
+- **Parser RFC 4180 CSV & Serializer (5 tests)**: Parsing field berkoma, tanda kutip ganda ter-escape (`""`), line break CRLF/LF, serialisasi objek ke teks CSV, dan penanganan input kosong.
+- **Logika Validasi Bulk CSV Importer (4 tests)**: Pemetaan fleksibel nama kolom header CSV, validasi integritas kuantitas manifest inbound, deteksi baris tidak valid, dan sanitasi spasi ekstra.
 - **Valuasi Inventaris & Formula Health Score (3 tests)**: Verifikasi ketepatan formula kalkulasi valuasi aset dan persentase skor kesegaran stok batch.
 - **Generator SVG Barcode & Label Termal (5 tests)**: Verifikasi encoding pola Code 39 standar, pembentukan elemen vektor `<svg>`, sanitasi karakter ilegal, dan opsi styling.
 - **Integrasi Express & Keamanan (4 tests)**: Pemeriksaan header keamanan (`X-Content-Type-Options`, `X-Frame-Options`, `X-XSS-Protection`), response JSON 404, dan penolakan payload tidak valid.
@@ -277,12 +285,14 @@ Hasil eksekusi:
 ✔ Express In-Memory Routing & Security Tests (Zero Network Sockets) (4 pass)
 ✔ Auth Middleware & RBAC Tests (4 pass)
 ✔ Code 39 SVG Barcode & Thermal Label Generator Tests (5 pass)
+✔ RFC 4180 CSV Parser & Serializer Tests (5 pass)
 ✔ FEFO Engine Allocation Logic (8 pass)
+✔ WMS Bulk CSV Import Business Logic Tests (4 pass)
 ✔ Warehouse Bin Location & Picking Route Allocation Tests (2 pass)
 ✔ WMS Reference Number Generator Tests (4 pass)
 ✔ Security Utilities: Password Hashing & JWT (5 pass)
 ✔ Middleware Input Validator Tests (12 pass)
-ℹ tests 47 | suites 14 | pass 47 | fail 0
+ℹ tests 56 | suites 16 | pass 56 | fail 0
 ```
 
 ---
@@ -297,11 +307,13 @@ Hasil eksekusi:
 | `GET` | `/api/analytics/kpi` | Ambil valuasi aset total, health score kesegaran, & fast-moving items | Public |
 | `GET` | `/api/products` | Ambil semua produk, total stok, HPP, dan status ambang batas | Public |
 | `POST` | `/api/products` | Daftarkan master SKU baru (beserta HPP) | Authenticated |
+| `POST` | `/api/products/import-csv` | Impor massal master SKU produk dari teks/file CSV | Authenticated |
 | `PUT` | `/api/products/:id` | Perbarui data produk | Authenticated |
 | `DELETE` | `/api/products/:id` | Nonaktifkan produk (hanya jika total stok 0) | `ADMIN` Only |
 | `GET` | `/api/products/:id/batches` | Ambil rincian batch aktif dan lokasi rak per SKU | Public |
 | `GET` | `/api/batches/fefo` | Ambil batch terurut FEFO (paling dekat kedaluwarsa) | Public |
 | `POST` | `/api/stock/in` | Penerimaan barang masuk (*Inbound*) beserta lokasi rak | Authenticated |
+| `POST` | `/api/stock/in/import-csv` | Impor massal manifest penerimaan barang via CSV | Authenticated |
 | `POST` | `/api/stock/out` | Pengeluaran otomatis FEFO & penerbitan Picking Slip | Authenticated |
 | `POST` | `/api/stock/disposal` | Pembuangan barang afkir/rusak/kedaluwarsa | Authenticated |
 | `POST` | `/api/stock/opname` | Eksekusi rekonsiliasi stock opname fisik | Authenticated |
@@ -336,14 +348,16 @@ Hasil eksekusi:
 - [x] Modul Rekonsiliasi Fisik Stock Opname & Penyesuaian Otomatis.
 - [x] Valuasi Aset Stok Inventaris & Metrik KPI Kesegaran Batch (*Freshness Health Score*).
 - [x] Generator Barcode Vektor SVG (Code 39) & Cetak Label Stiker Termal (Rak & SKU).
+- [x] Modul Bulk CSV Importer (Master SKU & Manifest Inbound Pasokan) dengan parser RFC 4180 mandiri.
+- [x] Dokumen Logistik Resmi: Bukti Penerimaan Barang (*Goods Receipt Note* / GRN) & Surat Jalan Pengiriman (*Delivery Order* / DO) format A4 siap cetak dengan barcode.
 - [x] Dukungan Pemindai Barcode Fisik (*USB Handheld Scanner*) pada pencarian inventaris.
 - [x] Dual Ekspor Laporan CSV (Master Inventaris & Audit Trail).
-- [x] Automated Testing Suite (47 Pengujian Unit & Integrasi).
+- [x] Automated Testing Suite (56 Pengujian Unit & Integrasi Lulus 100%).
 
 ### 🚀 Roadmap Selanjutnya:
 - [ ] Manajemen Multi-Gudang (*Multi-Facility Warehouse Management*).
 - [ ] Modul Purchase Order (PO) & Sales Order (SO) Terintegrasi.
-- [ ] Cetak Dokumen Surat Jalan (*Delivery Order*) dan Bukti Penerimaan Barang (*Goods Receipt Note*) format PDF resmi.
+- [ ] Export Laporan Ledger Kartu Stok Format PDF.
 
 ---
 

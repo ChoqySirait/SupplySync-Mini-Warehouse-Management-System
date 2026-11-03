@@ -522,6 +522,13 @@ async function loadTransactionLogs() {
                     timeStyle: 'short'
                 });
 
+                let docBtn = '<span class="text-slate-300">-</span>';
+                if (type === 'IN') {
+                    docBtn = `<button onclick="handlePrintGrnFromLog(${log.transaction_id})" class="px-2.5 py-1 rounded bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-[10px] font-bold border border-emerald-200 transition shadow-xs" title="Cetak Bukti Penerimaan Barang">Cetak GRN</button>`;
+                } else if (type === 'OUT') {
+                    docBtn = `<button onclick="handlePrintDoFromLog(${log.transaction_id})" class="px-2.5 py-1 rounded bg-blue-50 hover:bg-blue-100 text-blue-700 text-[10px] font-bold border border-blue-200 transition shadow-xs" title="Cetak Surat Jalan Pengiriman">Cetak DO</button>`;
+                }
+
                 const tr = document.createElement('tr');
                 tr.className = 'hover:bg-slate-50 transition border-b border-slate-100';
                 tr.innerHTML = `
@@ -532,11 +539,12 @@ async function loadTransactionLogs() {
                     <td class="p-4 text-right ${qtyColor}">${sign}${log.quantity} ${escapeHtml(log.unit || '')}</td>
                     <td class="p-4 text-slate-600 text-xs">${escapeHtml(log.operator || 'System Operator')}</td>
                     <td class="p-4 text-slate-500 italic text-xs max-w-xs truncate">${escapeHtml(log.notes || '-')}</td>
+                    <td class="p-4 text-center whitespace-nowrap">${docBtn}</td>
                 `;
                 tbody.appendChild(tr);
             });
         } else {
-            tbody.innerHTML = `<tr><td colspan="7" class="p-8 text-center text-slate-400">Belum ada riwayat transaksi mutasi yang tercatat.</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="8" class="p-8 text-center text-slate-400">Belum ada riwayat transaksi mutasi yang tercatat.</td></tr>`;
             renderAnalyticsChart([]);
         }
     } catch (error) {
@@ -782,9 +790,12 @@ async function handleStockOut(e) {
     }
 }
 
+let lastPickingSlipData = null;
+
 // Menampilkan Modal Picking Slip Digital
 function showPickingSlipModal(data) {
     if (!data) return;
+    lastPickingSlipData = data;
 
     document.getElementById('ps-ref-no').innerText = data.reference_no;
     document.getElementById('ps-product-name').innerText = data.product_name;
@@ -806,6 +817,21 @@ function showPickingSlipModal(data) {
     }
 
     openModal('modal-picking-slip');
+}
+
+function printCurrentDeliveryOrder() {
+    if (!lastPickingSlipData) {
+        showToast('Data rincian surat jalan tidak tersedia.', 'warning');
+        return;
+    }
+    if (typeof printDeliveryOrder === 'function') {
+        printDeliveryOrder({
+            ...lastPickingSlipData,
+            operator: `${currentUser.full_name} (${currentUser.role})`
+        });
+    } else {
+        showToast('Modul cetak dokumen belum siap.', 'error');
+    }
 }
 
 async function handleStockDisposal(e) {
@@ -1120,6 +1146,216 @@ function downloadCsvBlob(csvContent, filename) {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+}
+
+// --------------------------------------------------------------------
+// 11. PENCETAKAN DOKUMEN LOGISTIK (GRN & DO DARI AUDIT LOG)
+// --------------------------------------------------------------------
+function handlePrintGrnFromLog(transactionId) {
+    const log = currentTransactionLogs.find(l => l.transaction_id === transactionId);
+    if (!log) {
+        showToast('Data transaksi tidak ditemukan.', 'warning');
+        return;
+    }
+    if (typeof printGoodsReceiptNote === 'function') {
+        printGoodsReceiptNote(log);
+    } else {
+        showToast('Modul cetak dokumen belum siap.', 'error');
+    }
+}
+
+function handlePrintDoFromLog(transactionId) {
+    const log = currentTransactionLogs.find(l => l.transaction_id === transactionId);
+    if (!log) {
+        showToast('Data transaksi tidak ditemukan.', 'warning');
+        return;
+    }
+    if (typeof printDeliveryOrder === 'function') {
+        printDeliveryOrder(log);
+    } else {
+        showToast('Modul cetak dokumen belum siap.', 'error');
+    }
+}
+
+// --------------------------------------------------------------------
+// 12. MODUL BULK CSV IMPORTER (MASTER SKU & INBOUND MANIFEST)
+// --------------------------------------------------------------------
+function downloadProductCsvTemplate() {
+    const template = "sku,nama_produk,kategori,satuan,safety_stock,hpp,deskripsi\n" +
+                     "PRD-SAMPLE-01,Beras Super Ramos 5Kg,Sembako & Pangan,Sak,20,65000,Kemasan karung tebal anti lembab\n" +
+                     "PRD-SAMPLE-02,Minyak Goreng Sawit 2L,Minyak & Lemak,Pouch,30,34000,Karton isi 6 pouch\n" +
+                     "PRD-SAMPLE-03,Tepung Terigu Serbaguna 1Kg,Bahan Pokok,Bungkus,25,12500,Kemasan plastik vakum";
+    downloadCsvBlob(template, "Template_Master_SKU_SupplySync.csv");
+}
+
+function downloadInboundCsvTemplate() {
+    const template = "sku,qty,expired_date,batch_code,location_code,supplier_code,notes\n" +
+                     "PRD-FEED-01,50,2027-01-31,BTC-DEMO-01,A-01-01,SUP-CJ-01,Penerimaan kontainer mingguan\n" +
+                     "PRD-OIL-01,40,2026-11-30,BTC-DEMO-02,B-01-01,SUP-WIL-02,Pallet 2 pasokan utama\n" +
+                     "PRD-MEAT-01,35,2026-09-15,BTC-DEMO-03,C-01-01,SUP-CJ-01,Armada berpendingin";
+    downloadCsvBlob(template, "Template_Manifest_Inbound_SupplySync.csv");
+}
+
+function handleProductCsvFileSelect(e) {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = function(evt) {
+        const text = evt.target.result;
+        document.getElementById('csv-text-products').value = text;
+        previewProductCsvText();
+    };
+    reader.readAsText(file);
+}
+
+function previewProductCsvText() {
+    const text = document.getElementById('csv-text-products')?.value || '';
+    const wrap = document.getElementById('csv-preview-products-wrap');
+    const countEl = document.getElementById('csv-preview-products-count');
+    const table = document.getElementById('csv-preview-products-table');
+    if (!wrap || !table) return;
+
+    const lines = text.trim().split(/\r?\n/).filter(l => l.trim().length > 0);
+    if (lines.length <= 1) {
+        wrap.classList.add('hidden');
+        return;
+    }
+
+    wrap.classList.remove('hidden');
+    const header = lines[0].split(',').map(h => h.trim());
+    countEl.innerText = `${lines.length - 1} SKU Terdeteksi di File`;
+
+    const thead = table.querySelector('thead');
+    thead.innerHTML = `<tr>${header.map(h => `<th class="p-1">${escapeHtml(h)}</th>`).join('')}</tr>`;
+
+    const tbody = table.querySelector('tbody');
+    tbody.innerHTML = '';
+    lines.slice(1, 5).forEach(line => {
+        const cols = line.split(',').map(c => c.trim().replace(/^"|"$/g, ''));
+        const tr = document.createElement('tr');
+        tr.innerHTML = cols.map(c => `<td class="p-1 text-slate-700 truncate max-w-[120px]">${escapeHtml(c)}</td>`).join('');
+        tbody.appendChild(tr);
+    });
+}
+
+async function submitImportProductsCsv() {
+    const text = document.getElementById('csv-text-products')?.value || '';
+    if (!text.trim()) {
+        showToast('Pilih file CSV atau tempel teks terlebih dahulu!', 'warning');
+        return;
+    }
+
+    const btn = document.getElementById('btn-submit-import-products');
+    if (btn) btn.disabled = true;
+
+    try {
+        const res = await fetch('/api/products/import-csv', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${authToken}`
+            },
+            body: JSON.stringify({ csv_data: text })
+        });
+        const json = await res.json();
+
+        if (json.status === 'Success') {
+            showToast(json.message, 'success');
+            closeModal('modal-import-products-csv');
+            document.getElementById('csv-text-products').value = '';
+            document.getElementById('csv-file-products').value = '';
+            document.getElementById('csv-preview-products-wrap')?.classList.add('hidden');
+            await loadDashboardData();
+        } else {
+            showToast(json.message || 'Gagal mengimpor produk.', 'error');
+        }
+    } catch (err) {
+        showToast('Kesalahan jaringan: ' + err.message, 'error');
+    } finally {
+        if (btn) btn.disabled = false;
+    }
+}
+
+function handleInboundCsvFileSelect(e) {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = function(evt) {
+        const text = evt.target.result;
+        document.getElementById('csv-text-inbound').value = text;
+        previewInboundCsvText();
+    };
+    reader.readAsText(file);
+}
+
+function previewInboundCsvText() {
+    const text = document.getElementById('csv-text-inbound')?.value || '';
+    const wrap = document.getElementById('csv-preview-inbound-wrap');
+    const countEl = document.getElementById('csv-preview-inbound-count');
+    const table = document.getElementById('csv-preview-inbound-table');
+    if (!wrap || !table) return;
+
+    const lines = text.trim().split(/\r?\n/).filter(l => l.trim().length > 0);
+    if (lines.length <= 1) {
+        wrap.classList.add('hidden');
+        return;
+    }
+
+    wrap.classList.remove('hidden');
+    const header = lines[0].split(',').map(h => h.trim());
+    countEl.innerText = `${lines.length - 1} Batch Pasokan Terdeteksi`;
+
+    const thead = table.querySelector('thead');
+    thead.innerHTML = `<tr>${header.map(h => `<th class="p-1">${escapeHtml(h)}</th>`).join('')}</tr>`;
+
+    const tbody = table.querySelector('tbody');
+    tbody.innerHTML = '';
+    lines.slice(1, 5).forEach(line => {
+        const cols = line.split(',').map(c => c.trim().replace(/^"|"$/g, ''));
+        const tr = document.createElement('tr');
+        tr.innerHTML = cols.map(c => `<td class="p-1 text-slate-700 truncate max-w-[120px]">${escapeHtml(c)}</td>`).join('');
+        tbody.appendChild(tr);
+    });
+}
+
+async function submitImportInboundCsv() {
+    const text = document.getElementById('csv-text-inbound')?.value || '';
+    if (!text.trim()) {
+        showToast('Pilih file manifest CSV atau tempel teks terlebih dahulu!', 'warning');
+        return;
+    }
+
+    const btn = document.getElementById('btn-submit-import-inbound');
+    if (btn) btn.disabled = true;
+
+    try {
+        const res = await fetch('/api/stock/in/import-csv', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${authToken}`
+            },
+            body: JSON.stringify({ csv_data: text })
+        });
+        const json = await res.json();
+
+        if (json.status === 'Success') {
+            showToast(json.message, 'success');
+            closeModal('modal-import-inbound-csv');
+            document.getElementById('csv-text-inbound').value = '';
+            document.getElementById('csv-file-inbound').value = '';
+            document.getElementById('csv-preview-inbound-wrap')?.classList.add('hidden');
+            await loadDashboardData();
+        } else {
+            showToast(json.message || 'Gagal mengimpor manifest pasokan.', 'error');
+        }
+    } catch (err) {
+        showToast('Kesalahan jaringan: ' + err.message, 'error');
+    } finally {
+        if (btn) btn.disabled = false;
+    }
 }
 
 // Inisialisasi saat DOM siap & Pasang Barcode Scanner Event Listener

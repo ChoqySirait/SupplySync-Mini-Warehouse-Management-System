@@ -20,9 +20,10 @@ app.use((req, res, next) => {
     next();
 });
 
-// Body Parser Middleware
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+// Body Parser Middleware (JSON, Raw CSV text, & URL-encoded)
+app.use(express.json({ limit: '10mb' }));
+app.use(express.text({ type: ['text/csv', 'text/plain'], limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // Folder Statis Public untuk Frontend SPA
 app.use(express.static(path.join(__dirname, 'public')));
