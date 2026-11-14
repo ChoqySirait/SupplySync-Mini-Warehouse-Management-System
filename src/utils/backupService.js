@@ -3,22 +3,28 @@ const path = require('path');
 const db = require('../config/database');
 
 /**
- * SupplySync WMS - Automated Database Backup & Referential Integrity Verification Service
+ * SupplySync WMS - Automated Database Backup, Integrity & Recovery Service
+ * Menjamin integritas referensial data, kepatuhan audit, dan pemulihan bencana.
  */
 
+// Daftar tabel WMS terurut sesuai hierarki Foreign Key (Aman untuk Backup & Restore)
 const WMS_TABLES = [
+    'warehouse_facilities',
     'users',
     'categories',
     'suppliers',
-    'warehouse_facilities',
     'warehouse_locations',
     'products',
     'inventory_batches',
-    'stock_transfers',
-    'stock_transfer_items',
     'stock_transactions',
     'stock_transaction_items',
-    'stock_opname'
+    'stock_transfers',
+    'stock_transfer_items',
+    'stock_opname',
+    'purchase_orders',
+    'purchase_order_items',
+    'sales_orders',
+    'sales_order_items'
 ];
 
 const DEFAULT_BACKUP_DIR = path.resolve(process.cwd(), 'backups');
@@ -57,14 +63,15 @@ function evaluateIntegrity(datasets = {}) {
     // A. Indeks Produk untuk cek referensial cepat
     const productMap = new Map();
     products.forEach(p => {
+        const hasLegacyStockProp = p.stock !== undefined && p.stock !== null;
         productMap.set(p.product_id, {
             ...p,
-            stock: Number(p.stock) || 0,
+            stock: hasLegacyStockProp ? Number(p.stock) : undefined,
             min_stock: Number(p.min_stock) || 0
         });
 
-        // Cek stok master negatif
-        if ((Number(p.stock) || 0) < 0 || (Number(p.min_stock) || 0) < 0) {
+        // Cek nilai negatif
+        if ((hasLegacyStockProp && Number(p.stock) < 0) || (Number(p.min_stock) || 0) < 0) {
             anomalies.negative_quantities.push({
                 type: 'PRODUCT_NEGATIVE_VALUE',
                 product_id: p.product_id,
@@ -130,18 +137,20 @@ function evaluateIntegrity(datasets = {}) {
         }
     });
 
-    // C. Cek inkonsistensi saldo stok (Master Produk stock vs Total Quantity Batch)
+    // C. Cek inkonsistensi saldo stok jika master produk menyertakan target stock (untuk kompatibilitas testing)
     products.forEach(p => {
-        const masterStock = Number(p.stock) || 0;
-        const actualBatchSum = batchStockSum.get(p.product_id) || 0;
-        if (masterStock !== actualBatchSum) {
-            anomalies.stock_discrepancies.push({
-                product_id: p.product_id,
-                product_name: p.product_name,
-                master_stock: masterStock,
-                batch_sum: actualBatchSum,
-                discrepancy: masterStock - actualBatchSum
-            });
+        if (p.stock !== undefined && p.stock !== null) {
+            const masterStock = Number(p.stock) || 0;
+            const actualBatchSum = batchStockSum.get(p.product_id) || 0;
+            if (masterStock !== actualBatchSum) {
+                anomalies.stock_discrepancies.push({
+                    product_id: p.product_id,
+                    product_name: p.product_name,
+                    master_stock: masterStock,
+                    batch_sum: actualBatchSum,
+                    discrepancy: masterStock - actualBatchSum
+                });
+            }
         }
     });
 
@@ -200,12 +209,13 @@ function evaluateIntegrity(datasets = {}) {
 
 /**
  * 2. Eksekusi Verifikasi Integritas Data dari Database MySQL
+ * Menghitung stok nyata berbasis agregasi inventory_batches (Single Source of Truth)
  * @param {object} pool instance koneksi database (opsional)
  * @returns {Promise<object>}
  */
 async function verifyDataIntegrity(pool = db) {
     try {
-        const [products] = await pool.query('SELECT product_id, product_name, stock, min_stock FROM products');
+        const [products] = await pool.query('SELECT product_id, product_name, min_stock, cost_price FROM products');
         const [batches] = await pool.query('SELECT batch_id, batch_code, product_id, location_id, quantity, expired_date FROM inventory_batches');
         const [transactions] = await pool.query('SELECT transaction_id, reference_no, product_id, transaction_type, quantity FROM stock_transactions');
         const [transactionItems] = await pool.query('SELECT item_id, transaction_id, batch_id, quantity FROM stock_transaction_items');
@@ -250,8 +260,8 @@ async function createDatabaseBackup(options = {}) {
 
     const backupData = {
         metadata: {
-            application: 'SupplySync Mini Warehouse Management System',
-            version: '1.1.0',
+            application: 'SupplySync Enterprise Warehouse Management System',
+            version: '2.0.0',
             generated_at: now.toISOString(),
             tables_included: WMS_TABLES.length,
             total_records: 0
@@ -308,7 +318,7 @@ async function createDatabaseBackup(options = {}) {
 function generateSqlDump(backupData) {
     const lines = [
         '-- ====================================================================',
-        '-- SUPPLYNC WMS - AUTOMATED DATABASE SNAPSHOT DUMP',
+        '-- SUPPLYSYNC WMS - AUTOMATED DATABASE SNAPSHOT DUMP',
         `-- Generated At: ${backupData.metadata.generated_at}`,
         `-- App Version : ${backupData.metadata.version}`,
         '-- ====================================================================',
@@ -355,12 +365,13 @@ function listBackups(targetDir = DEFAULT_BACKUP_DIR) {
     const files = fs.readdirSync(targetDir);
 
     const backups = files
-        .filter(f => f.startsWith('supplysync_backup_') && f.endsWith('.json'))
+        .filter(f => f.startsWith('supplysync_backup_') && (f.endsWith('.json') || f.endsWith('.sql')))
         .map(filename => {
             const fullPath = path.join(targetDir, filename);
             const stats = fs.statSync(fullPath);
             return {
                 filename,
+                type: filename.endsWith('.json') ? 'JSON_SNAPSHOT' : 'SQL_DUMP',
                 size_bytes: stats.size,
                 size_kb: (stats.size / 1024).toFixed(2),
                 created_at: stats.birthtime.toISOString(),
@@ -372,6 +383,103 @@ function listBackups(targetDir = DEFAULT_BACKUP_DIR) {
     return backups;
 }
 
+/**
+ * 5. Pulihkan Database dari Berkas Cadangan (Restore Procedure)
+ * Mendukung pemulihan dari JSON Snapshot maupun SQL Dump.
+ * @param {string} backupFilename nama file atau path absolut ke berkas backup
+ * @param {object} options { pool, targetDir }
+ * @returns {Promise<object>}
+ */
+async function restoreDatabaseFromBackup(backupFilename, options = {}) {
+    const targetDir = options.targetDir || DEFAULT_BACKUP_DIR;
+    const pool = options.pool || db;
+
+    const fullPath = path.isAbsolute(backupFilename) 
+        ? backupFilename 
+        : path.join(targetDir, backupFilename);
+
+    if (!fs.existsSync(fullPath)) {
+        throw new Error(`Berkas cadangan '${backupFilename}' tidak ditemukan.`);
+    }
+
+    const isSql = fullPath.endsWith('.sql');
+    const isJson = fullPath.endsWith('.json');
+
+    if (!isSql && !isJson) {
+        throw new Error('Format berkas cadangan tidak valid. Hanya mendukung .json dan .sql.');
+    }
+
+    console.log(`🔄 Memulai prosedur pemulihan basis data dari: ${path.basename(fullPath)}...`);
+
+    let connection;
+    try {
+        connection = await pool.getConnection();
+        await connection.query('SET FOREIGN_KEY_CHECKS = 0;');
+
+        let restoredTables = 0;
+        let restoredRecords = 0;
+
+        if (isJson) {
+            const content = fs.readFileSync(fullPath, 'utf8');
+            const data = JSON.parse(content);
+
+            if (!data.tables || typeof data.tables !== 'object') {
+                throw new Error('Struktur berkas JSON snapshot tidak valid.');
+            }
+
+            // Bersihkan tabel sebelum memasukkan data restore
+            for (const table of WMS_TABLES) {
+                if (data.tables[table]) {
+                    await connection.query(`TRUNCATE TABLE \`${table}\`;`);
+                }
+            }
+
+            // Masukkan data per tabel
+            for (const table of WMS_TABLES) {
+                const rows = data.tables[table];
+                if (!rows || rows.length === 0) continue;
+
+                const columns = Object.keys(rows[0]);
+                const colsFormatted = columns.map(c => `\`${c}\``).join(', ');
+                const placeholders = columns.map(() => '?').join(', ');
+                const insertSql = `INSERT INTO \`${table}\` (${colsFormatted}) VALUES (${placeholders})`;
+
+                for (const row of rows) {
+                    const values = columns.map(c => row[c]);
+                    await connection.query(insertSql, values);
+                    restoredRecords++;
+                }
+
+                restoredTables++;
+            }
+        } else if (isSql) {
+            const sqlContent = fs.readFileSync(fullPath, 'utf8');
+            await connection.query(sqlContent);
+            restoredTables = WMS_TABLES.length;
+        }
+
+        await connection.query('SET FOREIGN_KEY_CHECKS = 1;');
+
+        console.log(`✅ Pemulihan basis data selesai dengan sukses! (${restoredRecords} data dipulihkan)`);
+        return {
+            success: true,
+            source_file: path.basename(fullPath),
+            restored_tables: restoredTables,
+            restored_records: restoredRecords,
+            restored_at: new Date().toISOString()
+        };
+
+    } catch (error) {
+        if (connection) {
+            await connection.query('SET FOREIGN_KEY_CHECKS = 1;').catch(() => {});
+        }
+        console.error('❌ Gagal memulihkan database:', error.message);
+        throw error;
+    } finally {
+        if (connection) connection.release();
+    }
+}
+
 module.exports = {
     WMS_TABLES,
     DEFAULT_BACKUP_DIR,
@@ -379,5 +487,6 @@ module.exports = {
     verifyDataIntegrity,
     createDatabaseBackup,
     generateSqlDump,
-    listBackups
+    listBackups,
+    restoreDatabaseFromBackup
 };

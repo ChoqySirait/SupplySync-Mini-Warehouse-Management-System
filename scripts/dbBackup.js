@@ -5,10 +5,13 @@ const db = require('../src/config/database');
 async function main() {
     const args = process.argv.slice(2);
     const isVerify = args.includes('--verify');
-    const isBackup = args.includes('--backup') || (!isVerify && args.length === 0);
+    const restoreIdx = args.indexOf('--restore');
+    const isRestore = restoreIdx !== -1;
+    const restoreFile = isRestore ? args[restoreIdx + 1] : null;
+    const isBackup = args.includes('--backup') || (!isVerify && !isRestore && args.length === 0);
 
     console.log('====================================================================');
-    console.log('   SUPPLYSYNC WMS - UTILITY CADANGAN & INTEGRITAS DATABASE');
+    console.log('   SUPPLYSYNC WMS - UTILITY CADANGAN, PEMULIHAN & INTEGRITAS');
     console.log('====================================================================');
 
     try {
@@ -50,6 +53,20 @@ async function main() {
             } else {
                 console.log('\n✅ Seluruh pemeriksaan integritas referensial data stok berada dalam kondisi aman.');
             }
+        }
+
+        if (isRestore) {
+            if (!restoreFile) {
+                console.error('❌ Parameter nama file cadangan wajib disertakan: node scripts/dbBackup.js --restore <filename>');
+                process.exitCode = 1;
+                return;
+            }
+            console.log(`\n🔄 Memulai Pemulihan Data dari Berkas: ${restoreFile}...`);
+            const restoreResult = await backupService.restoreDatabaseFromBackup(restoreFile, { pool: db });
+            console.log('\n✅ PEMULIHAN BASIS DATA BERHASIL:');
+            console.log(`   - Berkas Sumber : ${restoreResult.source_file}`);
+            console.log(`   - Total Tabel   : ${restoreResult.restored_tables}`);
+            console.log(`   - Total Rekor   : ${restoreResult.restored_records}`);
         }
 
         if (isBackup) {
