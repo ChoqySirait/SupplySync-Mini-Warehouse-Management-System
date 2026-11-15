@@ -11,6 +11,7 @@ import {
   Edit,
   AlertTriangle,
   Barcode as BarcodeIcon,
+  Printer,
 } from 'lucide-react';
 import Card from '../components/common/Card';
 import Button from '../components/common/Button';
@@ -18,6 +19,7 @@ import Input from '../components/common/Input';
 import Badge from '../components/common/Badge';
 import Table, { Column } from '../components/common/Table';
 import Modal from '../components/common/Modal';
+import ThermalLabel from '../components/common/ThermalLabel';
 import api from '../services/api';
 import { Product, Category, InventoryBatch } from '../types';
 
@@ -37,7 +39,9 @@ export const ProductsPage: React.FC = () => {
   const [showAddModal, setShowAddModal] = useState(false);
   const [showBatchModal, setShowBatchModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
+  const [showLabelModal, setShowLabelModal] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+  const [selectedLabelProduct, setSelectedLabelProduct] = useState<Product | null>(null);
 
   // Form State
   const [productId, setProductId] = useState('');
@@ -252,6 +256,18 @@ export const ProductsPage: React.FC = () => {
             icon={<Eye className="w-3.5 h-3.5" />}
           >
             Batch
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              setSelectedLabelProduct(row);
+              setShowLabelModal(true);
+            }}
+            icon={<Printer className="w-3.5 h-3.5" />}
+            title="Cetak Label Barcode"
+          >
+            Label
           </Button>
           {(isAdmin || isManager) && (
             <Button
@@ -571,6 +587,36 @@ export const ProductsPage: React.FC = () => {
             </Button>
           </div>
         </div>
+      </Modal>
+
+      {/* Barcode Thermal Label Modal */}
+      <Modal
+        isOpen={showLabelModal}
+        onClose={() => {
+          setShowLabelModal(false);
+          setSelectedLabelProduct(null);
+        }}
+        title="Cetak Label Barcode Thermal"
+        subtitle="Format stiker 50x30mm siap cetak ke printer thermal barcode"
+        maxWidth="md"
+      >
+        {selectedLabelProduct && (
+          <div className="py-2">
+            <ThermalLabel
+              title={selectedLabelProduct.product_name}
+              barcode={selectedLabelProduct.product_id}
+              subText={`Kategori: ${selectedLabelProduct.category_name || '-'}`}
+              extraInfo={[
+                { label: 'Unit', value: selectedLabelProduct.unit },
+                { label: 'Min Stok', value: `${selectedLabelProduct.min_stock || 0}` },
+                {
+                  label: 'Harga Jual',
+                  value: `Rp ${(selectedLabelProduct.sale_price || 0).toLocaleString('id-ID')}`,
+                },
+              ]}
+            />
+          </div>
+        )}
       </Modal>
     </div>
   );

@@ -69,6 +69,37 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 // 5. Folder Statis Public untuk Frontend SPA
 app.use(express.static(path.join(__dirname, 'public')));
 
+// 5.1 Health Check & System Diagnostics Probe
+app.get(['/health', '/api/health'], async (req, res) => {
+    let dbStatus = 'CONNECTED';
+    try {
+        const db = require('./src/config/database');
+        if (db && typeof db.query === 'function') {
+            await db.query('SELECT 1');
+        }
+    } catch (_) {
+        dbStatus = 'DISCONNECTED';
+    }
+
+    const memoryUsage = process.memoryUsage();
+    return res.status(dbStatus === 'CONNECTED' ? 200 : 503).json({
+        status: dbStatus === 'CONNECTED' ? 'HEALTHY' : 'DEGRADED',
+        version: '1.1.0',
+        environment: process.env.NODE_ENV || 'development',
+        uptime_seconds: Math.floor(process.uptime()),
+        timestamp: new Date().toISOString(),
+        database: {
+            engine: 'MySQL 8.0+ InnoDB',
+            status: dbStatus
+        },
+        memory: {
+            rss_mb: Math.round(memoryUsage.rss / 1024 / 1024),
+            heap_used_mb: Math.round(memoryUsage.heapUsed / 1024 / 1024),
+            heap_total_mb: Math.round(memoryUsage.heapTotal / 1024 / 1024)
+        }
+    });
+});
+
 // 6. Register Router REST API
 app.use('/api', apiRoutes);
 
@@ -83,11 +114,28 @@ app.use((req, res) => {
 // 9. Centralized Error Handling Middleware
 app.use(errorHandler);
 
-// Jalankan Server jika dipanggil langsung
+// Jalankan Server & Graceful Shutdown jika dipanggil langsung
 if (require.main === module) {
-    app.listen(PORT, () => {
+    const server = app.listen(PORT, () => {
         console.log(`🚀 Server SupplySync Enterprise WMS berjalan di http://localhost:${PORT}`);
     });
+
+    const gracefulShutdown = (signal) => {
+        console.log(`\n🛑 Menerima sinyal ${signal}. Menutup server dan koneksi basis data...`);
+        server.close(async () => {
+            try {
+                const db = require('./src/config/database');
+                if (db && typeof db.end === 'function') {
+                    await db.end();
+                }
+            } catch (_) {}
+            console.log('✅ Server dan koneksi ditutup dengan bersih.');
+            process.exit(0);
+        });
+    };
+
+    process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+    process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 }
 
 module.exports = app;

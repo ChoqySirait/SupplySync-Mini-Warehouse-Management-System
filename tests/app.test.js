@@ -197,4 +197,22 @@ describe('Express In-Memory Routing & Security Tests (Zero Network Sockets)', ()
 
         app.handle(req, res);
     });
+
+    test('9. Health check endpoint GET /health merespons status JSON sistem', (t, done) => {
+        const { req, res, getStatusCode, getBody } = createMockRequestResponse({
+            method: 'GET',
+            url: '/health'
+        });
+
+        res.on('finish', () => {
+            assert.ok([200, 503].includes(getStatusCode()));
+            const body = getBody();
+            assert.ok(body.status === 'HEALTHY' || body.status === 'DEGRADED');
+            assert.strictEqual(body.version, '1.1.0');
+            assert.ok(typeof body.uptime_seconds === 'number');
+            done();
+        });
+
+        app.handle(req, res);
+    });
 });

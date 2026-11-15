@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../components/common/Toast';
-import { MapPin, Plus, Trash2, Edit, Barcode as BarcodeIcon, Layers } from 'lucide-react';
+import { MapPin, Plus, Trash2, Edit, Barcode as BarcodeIcon, Layers, Printer } from 'lucide-react';
 import Card from '../components/common/Card';
 import Button from '../components/common/Button';
 import Input from '../components/common/Input';
 import Badge from '../components/common/Badge';
 import Table, { Column } from '../components/common/Table';
 import Modal from '../components/common/Modal';
+import ThermalLabel from '../components/common/ThermalLabel';
 import api from '../services/api';
 import { Location } from '../types';
 
@@ -20,6 +21,8 @@ export const LocationsPage: React.FC = () => {
 
   // Modal & Form State
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showLabelModal, setShowLabelModal] = useState(false);
+  const [selectedLabelLoc, setSelectedLabelLoc] = useState<Location | null>(null);
   const [zone, setZone] = useState('A');
   const [rack, setRack] = useState('01');
   const [tier, setTier] = useState('01');
@@ -113,7 +116,19 @@ export const LocationsPage: React.FC = () => {
     {
       header: 'Aksi',
       accessor: (row) => (
-        <div>
+        <div className="flex items-center gap-1.5">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              setSelectedLabelLoc(row);
+              setShowLabelModal(true);
+            }}
+            icon={<Printer className="w-3.5 h-3.5" />}
+            title="Cetak Label Rak"
+          >
+            Label
+          </Button>
           {(isAdmin || isManager) && (
             <button
               onClick={() => handleDeleteLocation(row.location_id)}
@@ -231,6 +246,34 @@ export const LocationsPage: React.FC = () => {
             </Button>
           </div>
         </form>
+      </Modal>
+
+      {/* Location Barcode Thermal Label Modal */}
+      <Modal
+        isOpen={showLabelModal}
+        onClose={() => {
+          setShowLabelModal(false);
+          setSelectedLabelLoc(null);
+        }}
+        title="Cetak Label Barcode Rak Bin"
+        subtitle="Stiker barcode rak bin 50x30mm siap tempel di rak gudang"
+        maxWidth="md"
+      >
+        {selectedLabelLoc && (
+          <div className="py-2">
+            <ThermalLabel
+              title={`Rak Bin: ${selectedLabelLoc.zone}-${selectedLabelLoc.rack}-${selectedLabelLoc.tier}-${selectedLabelLoc.bin}`}
+              barcode={selectedLabelLoc.barcode}
+              subText={`Zona ${selectedLabelLoc.zone} • Kapasitas: ${(selectedLabelLoc.capacity || 0).toLocaleString('id-ID')} Unit`}
+              extraInfo={[
+                { label: 'Zona', value: selectedLabelLoc.zone },
+                { label: 'Rak', value: selectedLabelLoc.rack },
+                { label: 'Tingkat', value: selectedLabelLoc.tier },
+                { label: 'Bin', value: selectedLabelLoc.bin },
+              ]}
+            />
+          </div>
+        )}
       </Modal>
     </div>
   );
