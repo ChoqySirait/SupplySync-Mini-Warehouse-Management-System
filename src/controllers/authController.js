@@ -72,7 +72,11 @@ exports.login = async (req, res) => {
             status: 'Success',
             message: `Autentikasi berhasil. Selamat datang kembali, ${user.full_name}!`,
             token,
-            user: tokenPayload
+            user: tokenPayload,
+            data: {
+                token,
+                user: tokenPayload
+            }
         });
 
     } catch (error) {

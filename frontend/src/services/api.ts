@@ -43,12 +43,9 @@ class ApiClient {
       headers,
     });
 
-    if (response.status === 401) {
+    if (response.status === 401 && !endpoint.includes('/auth/login')) {
       localStorage.removeItem('ss_token');
       localStorage.removeItem('ss_user');
-      if (window.location.pathname !== '/login') {
-        window.location.href = '/login';
-      }
     }
 
     const data = await response.json();
@@ -65,9 +62,12 @@ class ApiClient {
       method: 'POST',
       body: JSON.stringify(credentials),
     });
-    if (res.data?.token) {
-      localStorage.setItem('ss_token', res.data.token);
-      localStorage.setItem('ss_user', JSON.stringify(res.data.user));
+    const token = (res as any).token || res.data?.token;
+    const user = (res as any).user || res.data?.user;
+    if (token && user) {
+      localStorage.setItem('ss_token', token);
+      localStorage.setItem('ss_user', JSON.stringify(user));
+      return { token, user };
     }
     return res.data;
   }
