@@ -13,7 +13,9 @@
     "db:migrate:status": "node database/migrator.js --status",
     "db:backup": "node scripts/dbBackup.js --backup",
     "db:verify": "node scripts/dbBackup.js --verify",
-    "db:restore": "node scripts/dbBackup.js --restore"
+    "db:restore": "node scripts/dbBackup.js --restore",
+    "build:frontend": "npm run build --prefix frontend",
+    "dev:frontend": "npm run dev --prefix frontend"
   },
   "repository": {
     "type": "git",

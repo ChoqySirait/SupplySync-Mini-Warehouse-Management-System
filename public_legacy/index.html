@@ -1,0 +1,2194 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SupplySync — Enterprise Warehouse Management System</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chart.js CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body class="bg-slate-50 text-slate-800 antialiased min-h-screen flex">
+
+    <!-- FLOATING TOAST NOTIFICATION CONTAINER -->
+    <div id="toast-container" class="fixed top-5 right-5 z-50 flex flex-col gap-2.5 pointer-events-none max-w-sm w-full"></div>
+
+    <!-- SIDEBAR NAVIGATION -->
+    <aside id="sidebar" class="w-64 bg-white border-r border-slate-200 flex flex-col justify-between hidden md:flex shrink-0 z-40 fixed md:static inset-y-0 left-0 transition-all shadow-lg md:shadow-none">
+        <div>
+            <!-- Brand Logo -->
+            <div class="h-16 flex items-center justify-between px-6 border-b border-slate-100">
+                <div class="flex items-center gap-3">
+                    <div class="w-9 h-9 rounded-xl bg-blue-600 flex items-center justify-center font-black text-white text-lg shadow-md shadow-blue-500/20">
+                        S
+                    </div>
+                    <div>
+                        <h1 class="font-bold text-base tracking-wide text-slate-900 leading-none">SupplySync</h1>
+                        <span class="text-[10px] text-blue-600 font-semibold uppercase tracking-widest">Enterprise WMS</span>
+                    </div>
+                </div>
+                <!-- Mobile Close Button -->
+                <button onclick="toggleMobileSidebar()" class="md:hidden text-slate-400 hover:text-slate-700">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                </button>
+            </div>
+
+            <!-- Navigation Links -->
+            <nav class="p-4 space-y-1.5 text-xs font-semibold">
+                <button onclick="switchTab('overview')" id="nav-overview" class="nav-link active w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl transition text-slate-600 hover:bg-slate-100">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"/></svg>
+                    Dashboard Ringkasan
+                </button>
+
+                <button onclick="switchTab('inventory')" id="nav-inventory" class="nav-link w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl transition text-slate-600 hover:bg-slate-100">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg>
+                    Master Inventaris & SKU
+                </button>
+
+                <button onclick="switchTab('movements')" id="nav-movements" class="nav-link w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl transition text-slate-600 hover:bg-slate-100">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/></svg>
+                    Pusat Transaksi (FEFO)
+                </button>
+
+                <button onclick="switchTab('transfers')" id="nav-transfers" class="nav-link w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl transition text-slate-600 hover:bg-slate-100">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/></svg>
+                    Transfer Antar-Gudang
+                </button>
+
+                <button onclick="switchTab('orders')" id="nav-orders" class="nav-link w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl transition text-slate-600 hover:bg-slate-100">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/></svg>
+                    Pesanan PO & SO
+                </button>
+
+                <button onclick="switchTab('replenishment')" id="nav-replenishment" class="nav-link w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl transition text-slate-600 hover:bg-slate-100">
+                    <div class="flex items-center gap-3">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+                        <span>Restock & Aging</span>
+                    </div>
+                    <span id="badge-replenishment-alert" class="hidden px-2 py-0.5 text-[10px] font-bold bg-amber-500 text-white rounded-full">!</span>
+                </button>
+
+                <button onclick="switchTab('opname')" id="nav-opname" class="nav-link w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl transition text-slate-600 hover:bg-slate-100">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/></svg>
+                    Stock Opname Fisik
+                </button>
+
+                <button onclick="switchTab('locations')" id="nav-locations" class="nav-link w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl transition text-slate-600 hover:bg-slate-100">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>
+                    Peta Rak & Bin Gudang
+                </button>
+
+                <button onclick="switchTab('audit')" id="nav-audit" class="nav-link w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl transition text-slate-600 hover:bg-slate-100">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                    Audit Trail Transaksi
+                </button>
+            </nav>
+        </div>
+
+        <!-- User Profile Card -->
+        <div class="p-4 border-t border-slate-100">
+            <div class="flex items-center justify-between p-2.5 bg-slate-50 rounded-xl border border-slate-200">
+                <div class="flex items-center gap-2.5 overflow-hidden">
+                    <div id="sidebar-user-avatar" class="w-8 h-8 rounded-lg bg-blue-600 text-white font-bold flex items-center justify-center text-xs shadow-sm shrink-0">
+                        CP
+                    </div>
+                    <div class="overflow-hidden">
+                        <p id="sidebar-user-name" class="text-xs font-semibold text-slate-800 truncate">Choqy Pananda</p>
+                        <span id="sidebar-user-role" class="text-[10px] text-purple-600 font-bold flex items-center gap-1">
+                            <span class="w-1.5 h-1.5 rounded-full bg-current"></span> ADMIN Operator
+                        </span>
+                    </div>
+                </div>
+                <button onclick="openModal('modal-switch-user')" class="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-white rounded-lg transition" title="Ganti Operator / Login">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/></svg>
+                </button>
+            </div>
+        </div>
+    </aside>
+
+    <!-- MAIN CONTENT AREA -->
+    <div class="flex-1 flex flex-col min-w-0">
+        <!-- Top Navbar Header -->
+        <header class="h-16 bg-white border-b border-slate-200 px-6 flex items-center justify-between sticky top-0 z-30">
+            <div class="flex items-center gap-3">
+                <button onclick="toggleMobileSidebar()" class="md:hidden p-2 rounded-lg text-slate-600 hover:bg-slate-100">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+                </button>
+                <h2 id="page-title" class="text-base font-bold text-slate-900">Dashboard Overview & Analytics</h2>
+            </div>
+            
+            <div class="flex items-center gap-3">
+                <button onclick="openModal('modal-switch-user')" class="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 text-xs text-slate-700 font-medium transition">
+                    <span class="w-2 h-2 rounded-full bg-blue-500"></span>
+                    <span id="header-operator-name">Choqy Pananda (ADMIN)</span>
+                    <svg class="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+                </button>
+                <span class="px-3 py-1 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1.5">
+                    <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> MySQL Connected
+                </span>
+                <button onclick="openSystemDiagnosticsModal()" class="px-3 py-1.5 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 text-xs text-slate-700 font-medium flex items-center gap-1.5 transition" title="Diagnostik Integritas Stok & Snapshot Database">
+                    <svg class="w-3.5 h-3.5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
+                    <span class="hidden sm:inline">Integritas & Backup</span>
+                </button>
+                <button onclick="loadDashboardData()" class="p-2 text-slate-500 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 rounded-lg transition" title="Refresh Data (Perbarui)">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                </button>
+            </div>
+        </header>
+
+        <!-- PAGE CONTENT CONTAINER -->
+        <main class="p-6 space-y-6 flex-1 overflow-y-auto">
+
+            <!-- TAB 1: OVERVIEW DASHBOARD -->
+            <div id="tab-overview" class="tab-content space-y-6">
+                <!-- Stat Cards Grid -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+                    <!-- Stat 1: Valuasi Aset Stok Inventaris (Executive Valuation) -->
+                    <div class="card-enterprise p-5 rounded-2xl flex items-center justify-between bg-gradient-to-br from-white to-blue-50/40">
+                        <div>
+                            <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Valuasi Aset Stok</span>
+                            <h3 class="text-2xl font-black text-slate-900 mt-1 tracking-tight" id="stat-asset-value">Rp 0</h3>
+                            <span class="text-xs text-blue-600 font-semibold mt-1 block" id="stat-active-units">0 Unit Tersimpan</span>
+                        </div>
+                        <div class="w-12 h-12 rounded-xl bg-blue-100/80 text-blue-700 flex items-center justify-center border border-blue-200 shadow-sm">
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                        </div>
+                    </div>
+
+                    <!-- Stat 2: Skor Kesehatan Batch (Freshness Score) -->
+                    <div class="card-enterprise p-5 rounded-2xl flex items-center justify-between bg-gradient-to-br from-white to-emerald-50/40">
+                        <div>
+                            <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Health Score Batch</span>
+                            <h3 class="text-2xl font-black text-emerald-600 mt-1 tracking-tight" id="stat-health-score">100%</h3>
+                            <span class="text-xs text-emerald-700/80 font-medium mt-1 block" id="stat-health-sub">Semua batch prima</span>
+                        </div>
+                        <div class="w-12 h-12 rounded-xl bg-emerald-100/80 text-emerald-700 flex items-center justify-center border border-emerald-200 shadow-sm">
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
+                        </div>
+                    </div>
+
+                    <!-- Stat 3: Total SKU & Warning Kritis -->
+                    <div class="card-enterprise p-5 rounded-2xl flex items-center justify-between">
+                        <div>
+                            <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Master SKU & Kritis</span>
+                            <div class="flex items-baseline gap-2 mt-1">
+                                <h3 class="text-2xl font-black text-slate-900" id="stat-total-products">0</h3>
+                                <span class="text-xs font-bold text-amber-600" id="stat-low-stock-pill">(0 Kritis)</span>
+                            </div>
+                            <span class="text-xs text-slate-400 mt-1 block">Batas Minimum Terpantau</span>
+                        </div>
+                        <div class="w-12 h-12 rounded-xl bg-slate-100 text-slate-700 flex items-center justify-center border border-slate-200 shadow-sm">
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg>
+                        </div>
+                    </div>
+
+                    <!-- Stat 4: Prioritas Outflow (FEFO) -->
+                    <div class="card-enterprise p-5 rounded-2xl flex items-center justify-between bg-gradient-to-br from-white to-rose-50/40">
+                        <div>
+                            <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Prioritas Outflow (FEFO)</span>
+                            <h3 class="text-base font-black text-rose-600 mt-1 truncate max-w-[160px]" id="stat-fifo-priority">-</h3>
+                            <span class="text-xs text-rose-600/80 font-medium mt-1 block truncate max-w-[160px]" id="stat-fifo-sub">Batch paling dekat expired</span>
+                        </div>
+                        <div class="w-12 h-12 rounded-xl bg-rose-100/80 text-rose-600 flex items-center justify-center border border-rose-200 shadow-sm">
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Quick Action Banners -->
+                <div class="card-enterprise p-6 rounded-2xl space-y-4">
+                    <h3 class="text-sm font-bold text-slate-900">Aksi Cepat Operasional Gudang</h3>
+                    <div class="grid grid-cols-2 sm:grid-cols-5 gap-3">
+                        <button onclick="openModal('modal-add-product')" class="p-3.5 rounded-xl bg-blue-50 border border-blue-200 hover:bg-blue-100 text-blue-700 font-semibold text-xs flex items-center justify-center gap-2 transition shadow-sm">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+                            + SKU Baru
+                        </button>
+                        <button onclick="openModal('modal-stock-in')" class="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 hover:bg-emerald-100 text-emerald-700 font-semibold text-xs flex items-center justify-center gap-2 transition shadow-sm">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 11l5-5m0 0l5 5m-5-5v12"/></svg>
+                            Barang Masuk
+                        </button>
+                        <button onclick="openModal('modal-stock-out')" class="p-3.5 rounded-xl bg-rose-50 border border-rose-200 hover:bg-rose-100 text-rose-700 font-semibold text-xs flex items-center justify-center gap-2 transition shadow-sm">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 13l-5 5m0 0l-5-5m5 5V6"/></svg>
+                            Keluar (FEFO)
+                        </button>
+                        <button onclick="openModal('modal-stock-disposal')" class="p-3.5 rounded-xl bg-amber-50 border border-amber-200 hover:bg-amber-100 text-amber-700 font-semibold text-xs flex items-center justify-center gap-2 transition shadow-sm">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                            Buang Afkir
+                        </button>
+                        <button onclick="openModal('modal-stock-opname')" class="p-3.5 rounded-xl bg-purple-50 border border-purple-200 hover:bg-purple-100 text-purple-700 font-semibold text-xs flex items-center justify-center gap-2 transition shadow-sm">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
+                            Stock Opname
+                        </button>
+                    </div>
+                </div>
+
+                <!-- SECTION PERINGATAN CERDAS RESTOCK & BATCH AGING (Phase 19) -->
+                <div class="card-enterprise p-6 rounded-2xl bg-gradient-to-r from-amber-50/60 via-white to-rose-50/40 border border-amber-200/80 shadow-sm space-y-4">
+                    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 rounded-xl bg-amber-500 text-white flex items-center justify-center shadow-sm">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+                            </div>
+                            <div>
+                                <div class="flex items-center gap-2">
+                                    <h3 class="text-sm font-bold text-slate-900">Pusat Peringatan Dini Restock & Mitigasi Kedaluwarsa</h3>
+                                    <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300">Phase 19 Engine</span>
+                                </div>
+                                <p class="text-xs text-slate-500">Deteksi otomatis batas minimum SKU, prediksi kehabisan stok, dan mitigasi risiko kerugian batch.</p>
+                            </div>
+                        </div>
+                        <button onclick="switchTab('replenishment')" class="px-3.5 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm transition">
+                            <span>Buka Manajemen Restock & Aging</span>
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"/></svg>
+                        </button>
+                    </div>
+
+                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-1">
+                        <div class="p-3 bg-white/80 rounded-xl border border-slate-200">
+                            <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Perlu Restock</span>
+                            <p id="ovw-stat-reorder-count" class="text-xl font-black text-rose-600 mt-0.5">0 SKU</p>
+                            <span class="text-[10px] text-slate-500">Stok <= Batas Minimum</span>
+                        </div>
+                        <div class="p-3 bg-white/80 rounded-xl border border-slate-200">
+                            <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400">PO On-Order</span>
+                            <p id="ovw-stat-pipeline-count" class="text-xl font-black text-blue-600 mt-0.5">0 SKU</p>
+                            <span class="text-[10px] text-slate-500">Sedang Dipesan ke Vendor</span>
+                        </div>
+                        <div class="p-3 bg-white/80 rounded-xl border border-slate-200">
+                            <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Batch Kritis & Kadaluwarsa</span>
+                            <p id="ovw-stat-critical-count" class="text-xl font-black text-amber-600 mt-0.5">0 Batch</p>
+                            <span class="text-[10px] text-slate-500"><= 30 Hari Expired</span>
+                        </div>
+                        <div class="p-3 bg-white/80 rounded-xl border border-slate-200">
+                            <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Nilai Risiko Kedaluwarsa</span>
+                            <p id="ovw-stat-risk-val" class="text-base font-black text-slate-900 mt-0.5">Rp 0</p>
+                            <span class="text-[10px] text-rose-500 font-semibold">Potensi Kerugian Aset</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- SECTION GRAFIK VISUAL ANALYTICS -->
+                <div class="card-enterprise p-6 rounded-2xl space-y-4">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <h3 class="text-sm font-bold text-slate-900">Analisis Pergerakan Mutasi Stok (Inbound vs Outflow FEFO)</h3>
+                            <p class="text-xs text-slate-500">Visualisasi akumulasi volume mutasi per produk</p>
+                        </div>
+                        <span class="text-[10px] font-bold text-blue-600 bg-blue-50 px-2.5 py-1 rounded-full border border-blue-200">
+                            Real-time Analytics
+                        </span>
+                    </div>
+                    <div class="w-full h-72">
+                        <canvas id="stockMovementChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB 2: MASTER INVENTARIS -->
+            <div id="tab-inventory" class="tab-content hidden space-y-4">
+                <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                    <div>
+                        <h3 class="text-base font-bold text-slate-900">Master Inventaris & Produk SKU</h3>
+                        <p class="text-xs text-slate-500">Katalog SKU, jumlah batch aktif di rak, dan status ambang batas aman</p>
+                    </div>
+                    <div class="flex flex-wrap items-center gap-2">
+                        <select id="filter-category" onchange="filterProducts()" class="bg-white border border-slate-300 text-xs text-slate-800 rounded-xl px-3 py-2 outline-none">
+                            <option value="">Semua Kategori</option>
+                        </select>
+                        <div class="relative">
+                            <input type="text" id="search-input" onkeyup="filterProducts()" placeholder="Cari nama / SKU (Ctrl+K)..." class="bg-white border border-slate-300 text-xs text-slate-800 rounded-xl pl-3.5 pr-8 py-2 w-52 sm:w-64 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            <span class="absolute right-2.5 top-2.5 text-[10px] text-slate-400 font-mono">/</span>
+                        </div>
+                        <button onclick="exportInventoryToCSV()" class="bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold px-3 py-2 rounded-xl transition flex items-center gap-1.5" title="Export Inventaris ke CSV">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+                            Export CSV
+                        </button>
+                        <button onclick="openModal('modal-import-products-csv')" class="bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-semibold px-3 py-2 rounded-xl transition flex items-center gap-1.5 border border-blue-200" title="Impor Massal SKU dari File CSV">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
+                            Import CSV
+                        </button>
+                        <button onclick="openModal('modal-add-product')" class="bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold px-4 py-2 rounded-xl transition flex items-center gap-2 shadow-sm">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+                            Tambah SKU
+                        </button>
+                    </div>
+                </div>
+
+                <div class="card-enterprise rounded-2xl overflow-hidden">
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left text-xs">
+                            <thead class="bg-slate-100/80 text-slate-600 font-semibold uppercase text-[10px] tracking-wider border-b border-slate-200">
+                                <tr>
+                                    <th class="p-4">SKU / ID Produk</th>
+                                    <th class="p-4">Nama Produk & Batch</th>
+                                    <th class="p-4">Kategori</th>
+                                    <th class="p-4 text-right">Total Stok</th>
+                                    <th class="p-4">Satuan</th>
+                                    <th class="p-4">Status Ambang</th>
+                                    <th class="p-4 text-right">Aksi</th>
+                                </tr>
+                            </thead>
+                            <tbody id="product-table-body" class="divide-y divide-slate-100 text-slate-700">
+                                <tr><td colspan="7" class="p-6 text-center text-slate-400">Memuat data dari MySQL...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB 3: PUSAT TRANSAKSI -->
+            <div id="tab-movements" class="tab-content hidden space-y-6">
+                <div>
+                    <h3 class="text-base font-bold text-slate-900">Pusat Mutasi Stok & Alokasi FEFO</h3>
+                    <p class="text-xs text-slate-500">Penerimaan inbound batch baru, pengeluaran otomatis FEFO dengan picking route, atau pembuangan afkir</p>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
+                    <div class="card-enterprise p-6 rounded-2xl flex flex-col justify-between space-y-4">
+                        <div class="space-y-2">
+                            <div class="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center border border-emerald-100">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 11l5-5m0 0l5 5m-5-5v12"/></svg>
+                            </div>
+                            <h4 class="text-sm font-bold text-slate-900">Stock In (Penerimaan)</h4>
+                            <p class="text-xs text-slate-500">Input batch stok baru dari pemasok lengkap dengan penempatan lokasi rak/bin dan tanggal kedaluwarsa.</p>
+                        </div>
+                        <div class="flex gap-2">
+                            <button onclick="openModal('modal-stock-in')" class="flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs transition shadow-sm">
+                                Input Inbound
+                            </button>
+                            <button onclick="openModal('modal-import-inbound-csv')" class="px-3.5 py-2.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 font-semibold text-xs transition shadow-sm flex items-center gap-1.5" title="Impor Manifest Pasokan Massal dari CSV">
+                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
+                                Bulk CSV
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="card-enterprise p-6 rounded-2xl flex flex-col justify-between space-y-4">
+                        <div class="space-y-2">
+                            <div class="w-10 h-10 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center border border-rose-100">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 13l-5 5m0 0l-5-5m5 5V6"/></svg>
+                            </div>
+                            <h4 class="text-sm font-bold text-slate-900">Stock Out (Auto-FEFO & Picking)</h4>
+                            <p class="text-xs text-slate-500">Pengeluaran stok otomatis memotong batch terdekat kedaluwarsa dan menerbitkan Picking Slip rute lorong.</p>
+                        </div>
+                        <button onclick="openModal('modal-stock-out')" class="w-full py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-semibold text-xs transition shadow-sm">
+                            Proses FEFO Outflow
+                        </button>
+                    </div>
+
+                    <div class="card-enterprise p-6 rounded-2xl flex flex-col justify-between space-y-4">
+                        <div class="space-y-2">
+                            <div class="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center border border-amber-100">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                            </div>
+                            <h4 class="text-sm font-bold text-slate-900">Afkir / Disposal</h4>
+                            <p class="text-xs text-slate-500">Keluarkan barang busuk, rusak, atau kedaluwarsa dari stok aktif dengan alasan resmi.</p>
+                        </div>
+                        <button onclick="openModal('modal-stock-disposal')" class="w-full py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-semibold text-xs transition shadow-sm">
+                            Proses Pembuangan Afkir
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB 4: TRANSFER ANTAR-GUDANG (INTER-WAREHOUSE TRANSFERS) -->
+            <div id="tab-transfers" class="tab-content hidden space-y-4">
+                <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                    <div>
+                        <h3 class="text-base font-bold text-slate-900">Transfer Antar-Gudang & Relokasi Multi-Fasilitas</h3>
+                        <p class="text-xs text-slate-500">Manajemen pergerakan stok antar-cabang dengan status In-Transit, penerimaan sebagian, dan audit selisih fisik</p>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <select id="filter-transfer-status" onchange="loadTransfersList()" class="bg-white border border-slate-300 text-xs text-slate-800 rounded-xl px-3 py-2 outline-none">
+                            <option value="">Semua Status Transfer</option>
+                            <option value="IN_TRANSIT">Sedang Dikirim (IN_TRANSIT)</option>
+                            <option value="RECEIVED">Diterima Penuh (RECEIVED)</option>
+                            <option value="PARTIALLY_RECEIVED">Diterima Sebagian (PARTIAL)</option>
+                            <option value="CANCELLED">Dibatalkan (CANCELLED)</option>
+                        </select>
+                        <button id="btn-create-transfer" onclick="openCreateTransferModal()" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold px-4 py-2 rounded-xl transition flex items-center gap-2 shadow-sm">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+                            + Mulai Transfer Baru
+                        </button>
+                    </div>
+                </div>
+
+                <!-- KPI Summary Cards Grid -->
+                <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                    <div class="card-enterprise p-4 rounded-xl bg-amber-50/50 border border-amber-200">
+                        <span class="text-[10px] font-bold text-amber-700 uppercase tracking-wider block">Sedang In-Transit</span>
+                        <h4 class="text-xl font-extrabold text-amber-600 mt-1" id="stat-trf-transit">0 Transfer</h4>
+                        <span class="text-[11px] text-amber-700/80 block mt-0.5" id="stat-trf-transit-units">0 Unit dalam perjalanan</span>
+                    </div>
+                    <div class="card-enterprise p-4 rounded-xl bg-blue-50/50 border border-blue-200">
+                        <span class="text-[10px] font-bold text-blue-700 uppercase tracking-wider block">Total Unit Dikirim</span>
+                        <h4 class="text-xl font-extrabold text-blue-600 mt-1" id="stat-trf-sent">0 Unit</h4>
+                        <span class="text-[11px] text-blue-700/80 block mt-0.5">Akumulasi pengiriman</span>
+                    </div>
+                    <div class="card-enterprise p-4 rounded-xl bg-emerald-50/50 border border-emerald-200">
+                        <span class="text-[10px] font-bold text-emerald-700 uppercase tracking-wider block">Total Unit Diterima</span>
+                        <h4 class="text-xl font-extrabold text-emerald-600 mt-1" id="stat-trf-received">0 Unit</h4>
+                        <span class="text-[11px] text-emerald-700/80 block mt-0.5">Berhasil masuk gudang tujuan</span>
+                    </div>
+                    <div class="card-enterprise p-4 rounded-xl bg-rose-50/50 border border-rose-200">
+                        <span class="text-[10px] font-bold text-rose-700 uppercase tracking-wider block">Selisih / Kerusakan</span>
+                        <h4 class="text-xl font-extrabold text-rose-600 mt-1" id="stat-trf-discrepancy">0 Unit</h4>
+                        <span class="text-[11px] text-rose-700/80 block mt-0.5">Discrepancy tercatat</span>
+                    </div>
+                </div>
+
+                <!-- Transfers Data Table -->
+                <div class="card-enterprise rounded-2xl overflow-hidden bg-white border border-slate-200">
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left text-xs">
+                            <thead class="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold uppercase text-[10px] tracking-wider">
+                                <tr>
+                                    <th class="p-3">No. Transfer / SJ</th>
+                                    <th class="p-3">Gudang Asal &rarr; Tujuan</th>
+                                    <th class="p-3 text-center">Jumlah Dikirim</th>
+                                    <th class="p-3 text-center">Jumlah Diterima</th>
+                                    <th class="p-3 text-center">Status</th>
+                                    <th class="p-3">Waktu Pengiriman</th>
+                                    <th class="p-3">Operator</th>
+                                    <th class="p-3 text-right">Aksi</th>
+                                </tr>
+                            </thead>
+                            <tbody id="transfers-tbody" class="divide-y divide-slate-100">
+                                <tr><td colspan="8" class="p-8 text-center text-slate-400">Memuat data transfer antar-gudang...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB 5: INTEGRATED PURCHASE ORDERS & SALES ORDERS (PHASE 18) -->
+            <div id="tab-orders" class="tab-content hidden space-y-6">
+                <!-- Sub Tab Nav Header -->
+                <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-slate-200 pb-4">
+                    <div>
+                        <h3 class="text-base font-bold text-slate-900">Manajemen Pesanan Terintegrasi (PO & SO)</h3>
+                        <p class="text-xs text-slate-500">Siklus lengkap pengadaan dari pemasok (*Purchase Order*) dan pemenuhan pesanan pelanggan (*Sales Order*)</p>
+                    </div>
+                    <div class="flex items-center gap-2 bg-slate-100 p-1.5 rounded-2xl border border-slate-200 text-xs">
+                        <button id="subtab-btn-po" onclick="switchOrderSubTab('po')" class="px-4 py-2 rounded-xl font-bold transition bg-white text-blue-700 shadow-xs">
+                            📦 Purchase Orders (PO)
+                        </button>
+                        <button id="subtab-btn-so" onclick="switchOrderSubTab('so')" class="px-4 py-2 rounded-xl font-medium text-slate-600 hover:text-slate-900 transition">
+                            🚚 Sales Orders (SO)
+                        </button>
+                    </div>
+                </div>
+
+                <!-- SUBSECTION: PURCHASE ORDERS -->
+                <div id="orders-sub-po" class="space-y-4">
+                    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                        <div class="flex items-center gap-2">
+                            <select id="filter-po-status" onchange="loadPurchaseOrdersList()" class="bg-white border border-slate-300 text-xs text-slate-800 rounded-xl px-3 py-2 outline-none">
+                                <option value="">Semua Status PO</option>
+                                <option value="DRAFT">Draft Rencana</option>
+                                <option value="APPROVED">Disetujui (Approved)</option>
+                                <option value="PARTIALLY_RECEIVED">Diterima Sebagian</option>
+                                <option value="RECEIVED">Selesai Diterima (Received)</option>
+                                <option value="CANCELLED">Dibatalkan</option>
+                            </select>
+                        </div>
+                        <button id="btn-create-po" onclick="openCreatePoModal()" class="bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold px-4 py-2 rounded-xl transition flex items-center gap-2 shadow-sm">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+                            + Buat Purchase Order Baru
+                        </button>
+                    </div>
+
+                    <!-- KPI Summary PO -->
+                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                        <div class="card-enterprise p-4 rounded-xl bg-blue-50/50 border border-blue-200">
+                            <span class="text-[10px] font-bold text-blue-700 uppercase tracking-wider block">Total PO Terdaftar</span>
+                            <h4 class="text-xl font-extrabold text-blue-900 mt-1" id="stat-po-total">0 PO</h4>
+                            <span class="text-[11px] text-blue-700/80 block mt-0.5" id="stat-po-val">Rp 0 Total Nilai</span>
+                        </div>
+                        <div class="card-enterprise p-4 rounded-xl bg-emerald-50/50 border border-emerald-200">
+                            <span class="text-[10px] font-bold text-emerald-700 uppercase tracking-wider block">PO Disetujui (Approved)</span>
+                            <h4 class="text-xl font-extrabold text-emerald-700 mt-1" id="stat-po-approved">0 PO</h4>
+                            <span class="text-[11px] text-emerald-700/80 block mt-0.5">Siap Inbound / Penerimaan</span>
+                        </div>
+                        <div class="card-enterprise p-4 rounded-xl bg-amber-50/50 border border-amber-200">
+                            <span class="text-[10px] font-bold text-amber-700 uppercase tracking-wider block">Penerimaan Sebagian</span>
+                            <h4 class="text-xl font-extrabold text-amber-700 mt-1" id="stat-po-partial">0 PO</h4>
+                            <span class="text-[11px] text-amber-700/80 block mt-0.5">Menunggu Sisa Pasokan</span>
+                        </div>
+                        <div class="card-enterprise p-4 rounded-xl bg-purple-50/50 border border-purple-200">
+                            <span class="text-[10px] font-bold text-purple-700 uppercase tracking-wider block">Selesai Diterima 100%</span>
+                            <h4 class="text-xl font-extrabold text-purple-700 mt-1" id="stat-po-received">0 PO</h4>
+                            <span class="text-[11px] text-purple-700/80 block mt-0.5">Stok Terisi di Rak Gudang</span>
+                        </div>
+                    </div>
+
+                    <!-- Tabel PO -->
+                    <div class="card-enterprise rounded-2xl overflow-hidden border border-slate-200 bg-white shadow-xs">
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left border-collapse text-xs">
+                                <thead>
+                                    <tr class="bg-slate-50 border-b border-slate-200 text-slate-500 font-semibold uppercase text-[10px] tracking-wider">
+                                        <th class="p-3">Nomor PO</th>
+                                        <th class="p-3">Pemasok (Vendor)</th>
+                                        <th class="p-3">Gudang Tujuan</th>
+                                        <th class="p-3">Tgl Pesan</th>
+                                        <th class="p-3 text-right">Nilai Total</th>
+                                        <th class="p-3 text-center">Progress Diterima</th>
+                                        <th class="p-3 text-center">Status</th>
+                                        <th class="p-3 text-right">Aksi</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="po-tbody" class="divide-y divide-slate-100">
+                                    <tr><td colspan="8" class="p-8 text-center text-slate-400">Memuat data Purchase Order...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- SUBSECTION: SALES ORDERS -->
+                <div id="orders-sub-so" class="hidden space-y-4">
+                    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                        <div class="flex items-center gap-2">
+                            <select id="filter-so-status" onchange="loadSalesOrdersList()" class="bg-white border border-slate-300 text-xs text-slate-800 rounded-xl px-3 py-2 outline-none">
+                                <option value="">Semua Status SO</option>
+                                <option value="DRAFT">Draft</option>
+                                <option value="CONFIRMED">Dikonfirmasi (Confirmed)</option>
+                                <option value="DISPATCHED">Terkirim (Dispatched)</option>
+                                <option value="CANCELLED">Dibatalkan</option>
+                            </select>
+                        </div>
+                        <button id="btn-create-so" onclick="openCreateSoModal()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-4 py-2 rounded-xl transition flex items-center gap-2 shadow-sm">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+                            + Buat Sales Order Baru
+                        </button>
+                    </div>
+
+                    <!-- KPI Summary SO -->
+                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                        <div class="card-enterprise p-4 rounded-xl bg-slate-50 border border-slate-200">
+                            <span class="text-[10px] font-bold text-slate-700 uppercase tracking-wider block">Total Sales Order</span>
+                            <h4 class="text-xl font-extrabold text-slate-900 mt-1" id="stat-so-total">0 SO</h4>
+                            <span class="text-[11px] text-slate-500 block mt-0.5" id="stat-so-val">Rp 0 Omzet Terpesan</span>
+                        </div>
+                        <div class="card-enterprise p-4 rounded-xl bg-blue-50/50 border border-blue-200">
+                            <span class="text-[10px] font-bold text-blue-700 uppercase tracking-wider block">Dikonfirmasi (Confirmed)</span>
+                            <h4 class="text-xl font-extrabold text-blue-700 mt-1" id="stat-so-confirmed">0 SO</h4>
+                            <span class="text-[11px] text-blue-700/80 block mt-0.5">Siap Picking FEFO & Kirim</span>
+                        </div>
+                        <div class="card-enterprise p-4 rounded-xl bg-emerald-50/50 border border-emerald-200">
+                            <span class="text-[10px] font-bold text-emerald-700 uppercase tracking-wider block">Telah Terkirim (Dispatched)</span>
+                            <h4 class="text-xl font-extrabold text-emerald-700 mt-1" id="stat-so-dispatched">0 SO</h4>
+                            <span class="text-[11px] text-emerald-700/80 block mt-0.5">Stok Dipotong Alokasi FEFO</span>
+                        </div>
+                        <div class="card-enterprise p-4 rounded-xl bg-rose-50/50 border border-rose-200">
+                            <span class="text-[10px] font-bold text-rose-700 uppercase tracking-wider block">Dibatalkan</span>
+                            <h4 class="text-xl font-extrabold text-rose-700 mt-1" id="stat-so-cancelled">0 SO</h4>
+                            <span class="text-[11px] text-rose-700/80 block mt-0.5">Pesanan Dibatalkan</span>
+                        </div>
+                    </div>
+
+                    <!-- Tabel SO -->
+                    <div class="card-enterprise rounded-2xl overflow-hidden border border-slate-200 bg-white shadow-xs">
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left border-collapse text-xs">
+                                <thead>
+                                    <tr class="bg-slate-50 border-b border-slate-200 text-slate-500 font-semibold uppercase text-[10px] tracking-wider">
+                                        <th class="p-3">Nomor SO</th>
+                                        <th class="p-3">Pelanggan</th>
+                                        <th class="p-3">Gudang Asal</th>
+                                        <th class="p-3">Tgl Pesan</th>
+                                        <th class="p-3 text-right">Nilai Total</th>
+                                        <th class="p-3 text-center">Jumlah Barang</th>
+                                        <th class="p-3 text-center">Status</th>
+                                        <th class="p-3 text-right">Aksi</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="so-tbody" class="divide-y divide-slate-100">
+                                    <tr><td colspan="8" class="p-8 text-center text-slate-400">Memuat data Sales Order...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB: RESTOCK & BATCH AGING (Phase 19) -->
+            <div id="tab-replenishment" class="tab-content hidden space-y-6">
+                <!-- Header -->
+                <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                    <div>
+                        <div class="flex items-center gap-2">
+                            <h3 class="text-base font-bold text-slate-900">Otomatisasi Restock & Analitik Batch Aging</h3>
+                            <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300">Phase 19 Enterprise</span>
+                        </div>
+                        <p class="text-xs text-slate-500">Pemicu Purchase Order 1-klik, estimasi hari kehabisan stok (Days to Stockout), dan evaluasi umur simpan batch.</p>
+                    </div>
+                    <div class="flex flex-wrap items-center gap-2">
+                        <select id="rep-filter-facility" onchange="loadReplenishmentData()" class="bg-white border border-slate-300 text-xs text-slate-800 rounded-xl px-3 py-2 outline-none">
+                            <option value="">Semua Fasilitas Gudang</option>
+                        </select>
+                        <button onclick="handleTriggerBulkReorder()" class="bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold px-3.5 py-2 rounded-xl transition flex items-center gap-1.5 shadow-sm" title="Buat Draft PO Terkonsolidasi untuk Seluruh SKU Kritis">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+                            1-Klik Bulk Reorder PO
+                        </button>
+                        <button onclick="loadReplenishmentData()" class="bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold px-3 py-2 rounded-xl transition flex items-center gap-1.5" title="Refresh Analisis">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                            Refresh
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 4 KPI Metrics -->
+                <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                    <div class="card-enterprise p-4 rounded-xl bg-gradient-to-br from-white to-rose-50/30">
+                        <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Butuh Restock</span>
+                        <h4 id="rep-kpi-reorder-count" class="text-2xl font-black text-rose-600 mt-1">0 SKU</h4>
+                        <span id="rep-kpi-reorder-sub" class="text-xs text-slate-500 mt-0.5 block">0 item di bawah ambang</span>
+                    </div>
+                    <div class="card-enterprise p-4 rounded-xl bg-gradient-to-br from-white to-blue-50/30">
+                        <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400">PO On-Order</span>
+                        <h4 id="rep-kpi-pipeline-count" class="text-2xl font-black text-blue-600 mt-1">0 SKU</h4>
+                        <span class="text-xs text-slate-500 mt-0.5 block">Pesanan aktif di vendor</span>
+                    </div>
+                    <div class="card-enterprise p-4 rounded-xl bg-gradient-to-br from-white to-amber-50/30">
+                        <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Batch Kritis & Kadaluwarsa</span>
+                        <h4 id="rep-kpi-critical-count" class="text-2xl font-black text-amber-600 mt-1">0 Batch</h4>
+                        <span class="text-xs text-slate-500 mt-0.5 block">&le; 30 Hari menuju expired</span>
+                    </div>
+                    <div class="card-enterprise p-4 rounded-xl bg-gradient-to-br from-white to-purple-50/30">
+                        <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Nilai Risiko Kedaluwarsa</span>
+                        <h4 id="rep-kpi-risk-value" class="text-lg font-black text-slate-900 mt-1">Rp 0</h4>
+                        <span class="text-xs text-rose-500 font-semibold mt-0.5 block">Potensi kerugian aset fisik</span>
+                    </div>
+                </div>
+
+                <!-- Sub-Tabs Switcher: Restock vs Batch Aging -->
+                <div class="flex items-center gap-2 border-b border-slate-200">
+                    <button id="rep-subtab-reorder-btn" onclick="switchReplenishmentSubtab('reorder')" class="px-4 py-2.5 text-xs font-bold border-b-2 border-amber-600 text-amber-700 transition">
+                        Peringatan Restock & Rekomendasi PO
+                    </button>
+                    <button id="rep-subtab-aging-btn" onclick="switchReplenishmentSubtab('aging')" class="px-4 py-2.5 text-xs font-bold border-b-2 border-transparent text-slate-500 hover:text-slate-800 transition">
+                        Analisis Umur Simpan & Penuaan Batch
+                    </button>
+                </div>
+
+                <!-- SUBTAB 1: REORDER ALERTS TABLE -->
+                <div id="rep-subtab-reorder" class="space-y-4">
+                    <div class="card-enterprise rounded-2xl overflow-hidden">
+                        <div class="p-4 bg-slate-50 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                            <div>
+                                <h4 class="text-xs font-bold text-slate-800">Daftar Peringatan Ambang Batas SKU & Rekomendasi Reorder</h4>
+                                <p class="text-[11px] text-slate-500">Dihitung otomatis berbasis Min-Max Inventory & laju konsumsi harian (Burn Rate).</p>
+                            </div>
+                            <span id="rep-table-budget-pill" class="text-xs font-bold text-slate-700 bg-white px-3 py-1.5 rounded-xl border border-slate-200 shadow-sm">
+                                Estimasi Anggaran: Rp 0
+                            </span>
+                        </div>
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left text-xs">
+                                <thead class="bg-slate-100/80 text-slate-600 font-semibold uppercase text-[10px] tracking-wider border-b border-slate-200">
+                                    <tr>
+                                        <th class="p-3.5">SKU / ID Produk</th>
+                                        <th class="p-3.5">Nama Produk & Kategori</th>
+                                        <th class="p-3.5 text-right">Stok Fisik</th>
+                                        <th class="p-3.5 text-right">Min Stock</th>
+                                        <th class="p-3.5 text-right">On-Order (PO)</th>
+                                        <th class="p-3.5 text-right">Rekomendasi PO</th>
+                                        <th class="p-3.5">Pemasok & Lead Time</th>
+                                        <th class="p-3.5">Burn Rate & Prediksi Habis</th>
+                                        <th class="p-3.5 text-center">Status Restock</th>
+                                        <th class="p-3.5 text-right">Aksi</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="rep-reorder-tbody" class="divide-y divide-slate-100 text-slate-700">
+                                    <tr><td colspan="10" class="p-8 text-center text-slate-400">Memuat analisis peringatan restock...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- SUBTAB 2: BATCH AGING ANALYTICS -->
+                <div id="rep-subtab-aging" class="hidden space-y-4">
+                    <!-- Visual Distribution Bar -->
+                    <div class="card-enterprise p-5 rounded-2xl space-y-3">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <h4 class="text-xs font-bold text-slate-800">Distribusi Umur Simpan Batch Inventaris</h4>
+                                <p class="text-[11px] text-slate-500">Proporsi kesegaran stok berdasarkan sisa hari sebelum tanggal kedaluwarsa.</p>
+                            </div>
+                            <span id="rep-aging-freshness-score" class="text-xs font-bold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200">
+                                Skor Kesegaran: 100%
+                            </span>
+                        </div>
+
+                        <!-- Progress Bar Multi-Segment -->
+                        <div class="w-full h-4 bg-slate-100 rounded-full overflow-hidden flex shadow-inner">
+                            <div id="bar-aging-expired" class="bg-rose-600 h-full transition-all duration-500" style="width: 0%;" title="Kedaluwarsa"></div>
+                            <div id="bar-aging-critical" class="bg-amber-500 h-full transition-all duration-500" style="width: 0%;" title="Kritis (1-30 Hari)"></div>
+                            <div id="bar-aging-warning" class="bg-yellow-400 h-full transition-all duration-500" style="width: 0%;" title="Waspada (31-90 Hari)"></div>
+                            <div id="bar-aging-healthy" class="bg-emerald-500 h-full transition-all duration-500" style="width: 100%;" title="Aman (>90 Hari)"></div>
+                        </div>
+
+                        <!-- Legend & Pills -->
+                        <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2 text-xs">
+                            <div class="p-2.5 rounded-xl border border-rose-200 bg-rose-50/40">
+                                <span class="flex items-center gap-1.5 font-bold text-rose-700">
+                                    <span class="w-2.5 h-2.5 rounded-full bg-rose-600"></span>
+                                    Kedaluwarsa (&le; 0 Hari)
+                                </span>
+                                <p id="pill-aging-expired" class="font-bold text-slate-800 mt-1">0 Batch (0 Unit)</p>
+                                <span id="val-aging-expired" class="text-[10px] text-rose-600 block">Rp 0</span>
+                            </div>
+                            <div class="p-2.5 rounded-xl border border-amber-200 bg-amber-50/40">
+                                <span class="flex items-center gap-1.5 font-bold text-amber-700">
+                                    <span class="w-2.5 h-2.5 rounded-full bg-amber-500"></span>
+                                    Kritis (1 - 30 Hari)
+                                </span>
+                                <p id="pill-aging-critical" class="font-bold text-slate-800 mt-1">0 Batch (0 Unit)</p>
+                                <span id="val-aging-critical" class="text-[10px] text-amber-600 block">Rp 0</span>
+                            </div>
+                            <div class="p-2.5 rounded-xl border border-yellow-200 bg-yellow-50/40">
+                                <span class="flex items-center gap-1.5 font-bold text-yellow-700">
+                                    <span class="w-2.5 h-2.5 rounded-full bg-yellow-400"></span>
+                                    Waspada (31 - 90 Hari)
+                                </span>
+                                <p id="pill-aging-warning" class="font-bold text-slate-800 mt-1">0 Batch (0 Unit)</p>
+                                <span id="val-aging-warning" class="text-[10px] text-slate-500 block">Rp 0</span>
+                            </div>
+                            <div class="p-2.5 rounded-xl border border-emerald-200 bg-emerald-50/40">
+                                <span class="flex items-center gap-1.5 font-bold text-emerald-700">
+                                    <span class="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
+                                    Aman (> 90 Hari)
+                                </span>
+                                <p id="pill-aging-healthy" class="font-bold text-slate-800 mt-1">0 Batch (0 Unit)</p>
+                                <span id="val-aging-healthy" class="text-[10px] text-slate-500 block">Rp 0</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Top At-Risk Batches Table -->
+                    <div class="card-enterprise rounded-2xl overflow-hidden">
+                        <div class="p-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+                            <div>
+                                <h4 class="text-xs font-bold text-slate-800">Daftar Batch Berisiko Tinggi (Kedaluwarsa & Kritis)</h4>
+                                <p class="text-[11px] text-slate-500">Batch yang membutuhkan tindakan segera: alokasi pengeluaran prioritas FEFO atau pembuangan afkir.</p>
+                            </div>
+                        </div>
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left text-xs">
+                                <thead class="bg-slate-100/80 text-slate-600 font-semibold uppercase text-[10px] tracking-wider border-b border-slate-200">
+                                    <tr>
+                                        <th class="p-3.5">Kode Batch</th>
+                                        <th class="p-3.5">SKU & Nama Produk</th>
+                                        <th class="p-3.5">Gudang & Lokasi Rak</th>
+                                        <th class="p-3.5 text-right">Kuantitas</th>
+                                        <th class="p-3.5">Tanggal Expired & Sisa Hari</th>
+                                        <th class="p-3.5 text-right">Nilai Risiko (HPP)</th>
+                                        <th class="p-3.5 text-center">Status Umur</th>
+                                        <th class="p-3.5 text-right">Rekomendasi Tindakan</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="rep-aging-tbody" class="divide-y divide-slate-100 text-slate-700">
+                                    <tr><td colspan="8" class="p-8 text-center text-slate-400">Memuat data analitik batch aging...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+                <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                    <div>
+                        <h3 class="text-base font-bold text-slate-900">Rekonsiliasi Stock Opname Fisik</h3>
+                        <p class="text-xs text-slate-500">Pencocokan stok fisik aktual di rak terhadap data sistem dengan audit penyesuaian otomatis</p>
+                    </div>
+                    <button onclick="openModal('modal-stock-opname')" class="bg-purple-600 hover:bg-purple-700 text-white text-xs font-semibold px-4 py-2 rounded-xl transition flex items-center gap-2 shadow-sm">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+                        + Input Stock Opname
+                    </button>
+                </div>
+
+                <div class="card-enterprise rounded-2xl overflow-hidden">
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left text-xs">
+                            <thead class="bg-slate-100/80 text-slate-600 font-semibold uppercase text-[10px] tracking-wider border-b border-slate-200">
+                                <tr>
+                                    <th class="p-4">No. Opname</th>
+                                    <th class="p-4">Waktu Audit</th>
+                                    <th class="p-4">Nama Produk</th>
+                                    <th class="p-4 text-right">Stok Sistem</th>
+                                    <th class="p-4 text-right">Stok Fisik</th>
+                                    <th class="p-4 text-center">Selisih</th>
+                                    <th class="p-4">Auditor</th>
+                                    <th class="p-4">Catatan / Alasan</th>
+                                </tr>
+                            </thead>
+                            <tbody id="opname-table-body" class="divide-y divide-slate-100 text-slate-700">
+                                <tr><td colspan="8" class="p-6 text-center text-slate-400">Memuat riwayat stock opname...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB 5: PETA LOKASI RAK & BIN GUDANG (BARU) -->
+            <div id="tab-locations" class="tab-content hidden space-y-4">
+                <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                    <div>
+                        <h3 class="text-base font-bold text-slate-900">Peta Lokasi Rak & Bin Gudang</h3>
+                        <p class="text-xs text-slate-500">Visualisasi tata letak zona penyimpanan, lorong (*aisle*), rak (*rack*), dan kapasitas bin</p>
+                    </div>
+                    <button onclick="openModal('modal-add-location')" class="bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold px-4 py-2 rounded-xl transition flex items-center gap-2 shadow-sm">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+                        + Tambah Lokasi Rak
+                    </button>
+                </div>
+
+                <div id="locations-grid-container" class="grid grid-cols-1 md:grid-cols-3 gap-5">
+                    <div class="p-8 text-center text-slate-400 col-span-3">Memuat peta lokasi gudang...</div>
+                </div>
+            </div>
+
+            <!-- TAB 6: AUDIT TRAIL LOG -->
+            <div id="tab-audit" class="tab-content hidden space-y-4">
+                <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                    <div>
+                        <h3 class="text-base font-bold text-slate-900">Audit Trail Mutasi Transaksi Real-time</h3>
+                        <p class="text-xs text-slate-500">Catatan transaksi tidak dapat dimanipulasi dengan nomor referensi unik dan rincian alokasi</p>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <select id="filter-log-type" onchange="loadTransactionLogs()" class="bg-white border border-slate-300 text-xs text-slate-800 rounded-xl px-3 py-2 outline-none">
+                            <option value="">Semua Tipe Transaksi</option>
+                            <option value="IN">STOCK IN (Inbound)</option>
+                            <option value="OUT">STOCK OUT (FEFO)</option>
+                            <option value="DISPOSAL">DISPOSAL (Afkir)</option>
+                            <option value="ADJUSTMENT">ADJUSTMENT (Opname)</option>
+                        </select>
+                        <button onclick="exportLogsToCSV()" class="bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold px-4 py-2 rounded-xl transition flex items-center gap-2 shadow-sm">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+                            Export CSV
+                        </button>
+                    </div>
+                </div>
+
+                <div class="card-enterprise rounded-2xl overflow-hidden">
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left text-xs">
+                            <thead class="bg-slate-100/80 text-slate-600 font-semibold uppercase text-[10px] tracking-wider border-b border-slate-200">
+                                <tr>
+                                    <th class="p-4">No. Referensi</th>
+                                    <th class="p-4">Waktu Transaksi</th>
+                                    <th class="p-4">Nama Produk</th>
+                                    <th class="p-4">Tipe Mutasi</th>
+                                    <th class="p-4 text-right">Jumlah</th>
+                                    <th class="p-4">Operator</th>
+                                    <th class="p-4">Keterangan / Catatan</th>
+                                    <th class="p-4 text-center">Dokumen Resmi</th>
+                                </tr>
+                            </thead>
+                            <tbody id="log-table-body" class="divide-y divide-slate-100 text-slate-700">
+                                <tr><td colspan="8" class="p-6 text-center text-slate-400">Memuat log transaksi...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+        </main>
+    </div>
+
+    <!-- ==================================================================== -->
+    <!-- MODALS SECTION                                                       -->
+    <!-- ==================================================================== -->
+
+    <!-- Modal 1: Stock In -->
+    <div id="modal-stock-in" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-md w-full p-6 relative">
+            <h3 class="text-base font-bold text-slate-900 mb-1">Barang Masuk (Stock Inbound)</h3>
+            <p class="text-xs text-slate-500 mb-4">Input penerimaan batch baru beserta tanggal kedaluwarsa & penempatan rak.</p>
+            <form id="form-stock-in" onsubmit="handleStockIn(event)" class="space-y-3 text-xs">
+                <div>
+                    <label class="block font-semibold text-slate-700 mb-1">Pilih Produk SKU</label>
+                    <select id="in-product-id" required class="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 text-slate-900 font-medium focus:ring-2 focus:ring-blue-500 outline-none"></select>
+                </div>
+                <div>
+                    <label class="block font-semibold text-slate-700 mb-1">Lokasi Rak / Bin Gudang</label>
+                    <select id="in-location-id" class="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 text-slate-900 font-medium focus:ring-2 focus:ring-blue-500 outline-none"></select>
+                </div>
+                <div>
+                    <label class="block font-semibold text-slate-700 mb-1">Pemasok / Asal Pasokan</label>
+                    <select id="in-supplier-id" class="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 text-slate-900 font-medium focus:ring-2 focus:ring-blue-500 outline-none"></select>
+                </div>
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="block font-semibold text-slate-700 mb-1">Jumlah Quantity</label>
+                        <input type="number" id="in-quantity" min="1" required class="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 text-slate-900 font-medium focus:ring-2 focus:ring-blue-500 outline-none">
+                    </div>
+                    <div>
+                        <label class="block font-semibold text-slate-700 mb-1">Kode Batch (Opsional)</label>
+                        <input type="text" id="in-batch-code" placeholder="Auto-generate" class="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 text-slate-900 font-mono text-xs focus:ring-2 focus:ring-blue-500 outline-none">
+                    </div>
+                </div>
+                <div>
+                    <label class="block font-semibold text-slate-700 mb-1">Tanggal Kedaluwarsa (Expired Date)</label>
+                    <input type="date" id="in-expired-date" required class="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 text-slate-900 font-medium focus:ring-2 focus:ring-blue-500 outline-none">
+                </div>
+                <div>
+                    <label class="block font-semibold text-slate-700 mb-1">Catatan Transaksi</label>
+                    <input type="text" id="in-notes" placeholder="Misal: Penerimaan rutin pasokan pabrik" class="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 text-slate-900 font-medium focus:ring-2 focus:ring-blue-500 outline-none">
+                </div>
+                <div class="flex justify-end gap-2 pt-3 border-t border-slate-100">
+                    <button type="button" onclick="closeModal('modal-stock-in')" class="px-4 py-2 rounded-xl bg-slate-100 text-slate-700 font-medium hover:bg-slate-200">Batal</button>
+                    <button type="submit" class="px-4 py-2 rounded-xl bg-emerald-600 text-white font-medium hover:bg-emerald-700">Simpan Batch Inbound</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal 2: Stock Out FEFO -->
+    <div id="modal-stock-out" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-md w-full p-6 relative">
+            <h3 class="text-base font-bold text-slate-900 mb-1">Pengeluaran Barang (Auto-FEFO)</h3>
+            <p class="text-xs text-slate-500 mb-4">Sistem memotong batch dengan tanggal expired terdekat dan menerbitkan rute pengambilan rak.</p>
+            <form id="form-stock-out" onsubmit="handleStockOut(event)" class="space-y-3 text-xs">
+                <div>
+                    <label class="block font-semibold text-slate-700 mb-1">Pilih Produk SKU</label>
+                    <select id="out-product-id" required class="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 text-slate-900 font-medium focus:ring-2 focus:ring-blue-500 outline-none"></select>
+                </div>
+                <div>
+                    <label class="block font-semibold text-slate-700 mb-1">Jumlah Dikeluarkan</label>
+                    <input type="number" id="out-quantity" min="1" required class="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 text-slate-900 font-medium focus:ring-2 focus:ring-blue-500 outline-none">
+                </div>
+                <div>
+                    <label class="block font-semibold text-slate-700 mb-1">Tujuan Pengiriman / Catatan</label>
+                    <input type="text" id="out-notes" placeholder="Misal: Pengiriman ke Pelanggan Toko A" class="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 text-slate-900 font-medium focus:ring-2 focus:ring-blue-500 outline-none">
+                </div>
+                <div class="flex items-center gap-2 pt-1">
+                    <input type="checkbox" id="out-allow-expired" class="rounded border-slate-300 text-blue-600 focus:ring-blue-500">
+                    <label for="out-allow-expired" class="text-slate-600 select-none">Izinkan alokasi batch kedaluwarsa</label>
+                </div>
+                <div class="flex justify-end gap-2 pt-3 border-t border-slate-100">
+                    <button type="button" onclick="closeModal('modal-stock-out')" class="px-4 py-2 rounded-xl bg-slate-100 text-slate-700 font-medium hover:bg-slate-200">Batal</button>
+                    <button type="submit" class="px-4 py-2 rounded-xl bg-rose-600 text-white font-medium hover:bg-rose-700">Eksekusi FEFO Outflow</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal 3: Add SKU -->
+    <div id="modal-add-product" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-md w-full p-6 relative">
+            <h3 class="text-base font-bold text-slate-900 mb-1">Daftarkan Master Produk Baru</h3>
+            <p class="text-xs text-slate-500 mb-4">Tambahkan SKU baru ke dalam katalog master gudang.</p>
+            <form id="form-add-product" onsubmit="handleAddProduct(event)" class="space-y-3 text-xs">
+                <div>
+                    <label class="block font-semibold text-slate-700 mb-1">SKU / ID Produk</label>
+                    <input type="text" id="prod-id" placeholder="Misal: PRD-SEM-001" required class="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 text-slate-900 font-mono uppercase focus:ring-2 focus:ring-blue-500 outline-none">
+                </div>
+                <div>
+                    <label class="block font-semibold text-slate-700 mb-1">Nama Produk</label>
+                    <input type="text" id="prod-name" placeholder="Misal: Beras Premium Super 5Kg" required class="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 text-slate-900 font-medium focus:ring-2 focus:ring-blue-500 outline-none">
+                </div>
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="block font-semibold text-slate-700 mb-1">Kategori</label>
+                        <input type="text" id="prod-category" placeholder="Sembako & Pangan" required class="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 text-slate-900 font-medium focus:ring-2 focus:ring-blue-500 outline-none">
+                    </div>
+                    <div>
+                        <label class="block font-semibold text-slate-700 mb-1">Satuan Unit</label>
+                        <input type="text" id="prod-unit" placeholder="Pcs / Sak / Karton" required class="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 text-slate-900 font-medium focus:ring-2 focus:ring-blue-500 outline-none">
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="block font-semibold text-slate-700 mb-1">Safety Stock</label>
+                        <input type="number" id="prod-min-stock" value="10" min="0" required class="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 text-slate-900 font-medium focus:ring-2 focus:ring-blue-500 outline-none">
+                    </div>
+                    <div>
+                        <label class="block font-semibold text-slate-700 mb-1">Harga Pokok / HPP (Rp)</label>
+                        <input type="number" id="prod-cost-price" placeholder="Misal: 50000" min="0" class="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 text-slate-900 font-medium focus:ring-2 focus:ring-blue-500 outline-none">
+                    </div>
+                </div>
+                <div>
+                    <label class="block font-semibold text-slate-700 mb-1">Deskripsi Tambahan</label>
+                    <input type="text" id="prod-desc" placeholder="Spesifikasi penyimpanan, dll." class="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 text-slate-900 font-medium focus:ring-2 focus:ring-blue-500 outline-none">
+                </div>
+                <div class="flex justify-end gap-2 pt-3 border-t border-slate-100">
+                    <button type="button" onclick="closeModal('modal-add-product')" class="px-4 py-2 rounded-xl bg-slate-100 text-slate-700 font-medium hover:bg-slate-200">Batal</button>
+                    <button type="submit" class="px-4 py-2 rounded-xl bg-blue-600 text-white font-medium hover:bg-blue-700">Daftarkan SKU</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal 4: Stock Disposal -->
+    <div id="modal-stock-disposal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-md w-full p-6 relative">
+            <h3 class="text-base font-bold text-slate-900 mb-1">Pembuangan Barang Afkir / Rusak</h3>
+            <p class="text-xs text-slate-500 mb-4">Keluarkan produk rusak/kedaluwarsa dari inventaris aktif dengan alasan tercatat.</p>
+            <form id="form-stock-disposal" onsubmit="handleStockDisposal(event)" class="space-y-3 text-xs">
+                <div>
+                    <label class="block font-semibold text-slate-700 mb-1">Pilih Produk SKU</label>
+                    <select id="disp-product-id" required class="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 text-slate-900 font-medium focus:ring-2 focus:ring-amber-500 outline-none"></select>
+                </div>
+                <div>
+                    <label class="block font-semibold text-slate-700 mb-1">Jumlah Afkir</label>
+                    <input type="number" id="disp-quantity" min="1" required class="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 text-slate-900 font-medium focus:ring-2 focus:ring-amber-500 outline-none">
+                </div>
+                <div>
+                    <label class="block font-semibold text-slate-700 mb-1">Alasan Resmi Pembuangan</label>
+                    <select id="disp-reason" required class="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 text-slate-900 font-medium focus:ring-2 focus:ring-amber-500 outline-none">
+                        <option value="Barang Kedaluwarsa (Expired Date Passed)">Barang Kedaluwarsa (Expired Date Passed)</option>
+                        <option value="Kemasan Rusak / Bocor Saat Handling">Kemasan Rusak / Bocor Saat Handling</option>
+                        <option value="Kualitas Menurun / Busuk / Kontaminasi">Kualitas Menurun / Busuk / Kontaminasi</option>
+                        <option value="Hasil Uji Lab Tidak Memenuhi Standar Mutu">Hasil Uji Lab Tidak Memenuhi Standar Mutu</option>
+                    </select>
+                </div>
+                <div class="flex justify-end gap-2 pt-3 border-t border-slate-100">
+                    <button type="button" onclick="closeModal('modal-stock-disposal')" class="px-4 py-2 rounded-xl bg-slate-100 text-slate-700 font-medium hover:bg-slate-200">Batal</button>
+                    <button type="submit" class="px-4 py-2 rounded-xl bg-amber-600 text-white font-medium hover:bg-amber-700">Eksekusi Pembuangan</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal 5: Stock Opname -->
+    <div id="modal-stock-opname" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-md w-full p-6 relative">
+            <h3 class="text-base font-bold text-slate-900 mb-1">Input Rekonsiliasi Stock Opname</h3>
+            <p class="text-xs text-slate-500 mb-4">Hitung fisik aktual di rak gudang untuk penyesuaian stok sistem.</p>
+            <form id="form-stock-opname" onsubmit="handleStockOpname(event)" class="space-y-3 text-xs">
+                <div>
+                    <label class="block font-semibold text-slate-700 mb-1">Pilih Produk SKU</label>
+                    <select id="opn-product-id" onchange="onOpnameProductChange()" required class="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 text-slate-900 font-medium focus:ring-2 focus:ring-purple-500 outline-none"></select>
+                </div>
+                <div class="p-3 bg-purple-50 rounded-xl border border-purple-100 flex items-center justify-between">
+                    <span class="text-purple-800 font-semibold">Stok Tercatat di Sistem:</span>
+                    <span id="opn-system-stock-display" class="font-extrabold text-purple-900 text-sm">-</span>
+                </div>
+                <div>
+                    <label class="block font-semibold text-slate-700 mb-1">Hasil Perhitungan Fisik Aktual (Unit)</label>
+                    <input type="number" id="opn-physical-qty" min="0" required placeholder="Masukkan jumlah fisik di rak" class="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 text-slate-900 font-medium focus:ring-2 focus:ring-purple-500 outline-none">
+                </div>
+                <div>
+                    <label class="block font-semibold text-slate-700 mb-1">Catatan / Alasan Selisih</label>
+                    <input type="text" id="opn-reason" placeholder="Misal: Audit fisik bulanan rak B3" required class="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 text-slate-900 font-medium focus:ring-2 focus:ring-purple-500 outline-none">
+                </div>
+                <div class="flex justify-end gap-2 pt-3 border-t border-slate-100">
+                    <button type="button" onclick="closeModal('modal-stock-opname')" class="px-4 py-2 rounded-xl bg-slate-100 text-slate-700 font-medium hover:bg-slate-200">Batal</button>
+                    <button type="submit" class="px-4 py-2 rounded-xl bg-purple-600 text-white font-medium hover:bg-purple-700">Simpan Stock Opname</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal 6: Batch Details Breakdown -->
+    <div id="modal-batch-details" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-2xl w-full p-6 relative">
+            <div class="flex items-center justify-between mb-4 border-b border-slate-100 pb-3">
+                <div>
+                    <h3 id="batch-detail-title" class="text-base font-bold text-slate-900">Rincian Batch SKU & Lokasi Rak</h3>
+                    <p class="text-xs text-slate-500">Daftar seluruh batch aktif, lokasi rak fisik, dan sisa hari kedaluwarsa</p>
+                </div>
+                <button onclick="closeModal('modal-batch-details')" class="text-slate-400 hover:text-slate-700 text-xl font-bold">&times;</button>
+            </div>
+            <div class="overflow-x-auto max-h-80 overflow-y-auto">
+                <table class="w-full text-left text-xs">
+                    <thead class="bg-slate-100 text-slate-600 font-semibold uppercase text-[10px] tracking-wider sticky top-0">
+                        <tr>
+                            <th class="p-3">Kode Batch</th>
+                            <th class="p-3">Lokasi Rak</th>
+                            <th class="p-3">Pemasok</th>
+                            <th class="p-3">Tgl Kedaluwarsa</th>
+                            <th class="p-3 text-right">Sisa Stok</th>
+                        </tr>
+                    </thead>
+                    <tbody id="batch-detail-body" class="divide-y divide-slate-100">
+                        <tr><td colspan="5" class="p-4 text-center text-slate-400">Memuat rincian batch...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+            <div class="flex justify-end pt-4 border-t border-slate-100 mt-4">
+                <button onclick="closeModal('modal-batch-details')" class="px-4 py-2 rounded-xl bg-slate-100 text-slate-700 font-medium hover:bg-slate-200 text-xs">Tutup</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal 7: Digital Picking Slip (Surat Jalan & Rute Petik) -->
+    <div id="modal-picking-slip" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-2xl w-full p-6 relative">
+            <div class="border-b border-slate-200 pb-4 mb-4 flex items-center justify-between">
+                <div>
+                    <span class="text-[10px] font-bold uppercase tracking-widest text-rose-600 bg-rose-50 px-2 py-0.5 rounded border border-rose-200">WMS Picking Route Slip</span>
+                    <h3 class="text-lg font-black text-slate-900 mt-1">Surat Jalan Pengambilan Barang (FEFO)</h3>
+                    <p class="text-xs text-slate-500">Instruksi rute rak fisik untuk staf pemetik gudang (*warehouse picker*)</p>
+                </div>
+                <button onclick="closeModal('modal-picking-slip')" class="text-slate-400 hover:text-slate-700 text-xl font-bold">&times;</button>
+            </div>
+
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-slate-50 p-3.5 rounded-xl border border-slate-200 text-xs mb-4">
+                <div>
+                    <span class="text-slate-400 block text-[10px]">No. Referensi:</span>
+                    <span id="ps-ref-no" class="font-mono font-bold text-slate-800">-</span>
+                </div>
+                <div>
+                    <span class="text-slate-400 block text-[10px]">Waktu Transaksi:</span>
+                    <span id="ps-date" class="font-medium text-slate-800">-</span>
+                </div>
+                <div>
+                    <span class="text-slate-400 block text-[10px]">Petugas Pemetik:</span>
+                    <span id="ps-picker" class="font-medium text-slate-800">-</span>
+                </div>
+                <div>
+                    <span class="text-slate-400 block text-[10px]">Total Kuantitas:</span>
+                    <span id="ps-total-qty" class="font-bold text-rose-600">-</span>
+                </div>
+            </div>
+
+            <div class="mb-4">
+                <h4 class="text-xs font-bold text-slate-700 mb-2">Instruksi Lokasi Rak & Batch yang Harus Diambil:</h4>
+                <div class="border border-slate-200 rounded-xl overflow-hidden">
+                    <table class="w-full text-left text-xs">
+                        <thead class="bg-slate-100 text-slate-600 font-semibold uppercase text-[10px] tracking-wider">
+                            <tr>
+                                <th class="p-3">Kode Batch</th>
+                                <th class="p-3">Lokasi Bin</th>
+                                <th class="p-3">Zona Gudang</th>
+                                <th class="p-3">Rute Rak (Lorong > Rak > Tingkat)</th>
+                                <th class="p-3 text-right">Ambil Unit</th>
+                            </tr>
+                        </thead>
+                        <tbody id="ps-items-body" class="divide-y divide-slate-100"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="flex justify-between items-center pt-3 border-t border-slate-100">
+                <span id="ps-product-name" class="text-xs font-bold text-slate-600 truncate max-w-xs">Produk</span>
+                <div class="flex gap-2">
+                    <button onclick="printCurrentDeliveryOrder()" class="px-4 py-2 rounded-xl bg-blue-600 text-white font-medium hover:bg-blue-700 text-xs flex items-center gap-1.5 shadow-sm">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                        Cetak Surat Jalan (DO)
+                    </button>
+                    <button onclick="window.print()" class="px-4 py-2 rounded-xl bg-slate-900 text-white font-medium hover:bg-slate-800 text-xs flex items-center gap-1.5 shadow-sm">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/></svg>
+                        Cetak Picking Slip
+                    </button>
+                    <button onclick="closeModal('modal-picking-slip')" class="px-4 py-2 rounded-xl bg-slate-100 text-slate-700 font-medium hover:bg-slate-200 text-xs">Selesai</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal 8: Operator Switcher / Login (RBAC) -->
+    <div id="modal-switch-user" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-sm w-full p-6 relative">
+            <h3 class="text-base font-bold text-slate-900 mb-1">Ganti Operator Aktif (RBAC)</h3>
+            <p class="text-xs text-slate-500 mb-4">Pilih peran operator untuk menguji hak akses (Role-Based Access Control):</p>
+            <div id="user-switch-options" class="space-y-2 mb-4">
+                <div class="text-center text-xs text-slate-400 p-4">Memuat daftar operator...</div>
+            </div>
+            <div class="flex justify-end pt-3 border-t border-slate-100">
+                <button type="button" onclick="closeModal('modal-switch-user')" class="px-4 py-2 rounded-xl bg-slate-100 text-slate-700 font-medium hover:bg-slate-200 text-xs">Tutup</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal 9: Add Location -->
+    <div id="modal-add-location" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-md w-full p-6 relative">
+            <h3 class="text-base font-bold text-slate-900 mb-1">Tambah Lokasi Rak / Bin Baru</h3>
+            <p class="text-xs text-slate-500 mb-4">Daftarkan koordinat rak fisik untuk tata letak gudang.</p>
+            <form id="form-add-location" onsubmit="handleAddLocation(event)" class="space-y-3 text-xs">
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="block font-semibold text-slate-700 mb-1">Kode Lokasi Bin</label>
+                        <input type="text" id="loc-code" placeholder="Misal: D-01-01" required class="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 text-slate-900 font-mono uppercase focus:ring-2 focus:ring-blue-500 outline-none">
+                    </div>
+                    <div>
+                        <label class="block font-semibold text-slate-700 mb-1">Nama Zona Gudang</label>
+                        <input type="text" id="loc-zone" placeholder="Zona Kemasan" required class="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 text-slate-900 font-medium focus:ring-2 focus:ring-blue-500 outline-none">
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="block font-semibold text-slate-700 mb-1">Lorong (Aisle)</label>
+                        <input type="text" id="loc-aisle" placeholder="Lorong 4" required class="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 text-slate-900 font-medium focus:ring-2 focus:ring-blue-500 outline-none">
+                    </div>
+                    <div>
+                        <label class="block font-semibold text-slate-700 mb-1">Rak (Rack)</label>
+                        <input type="text" id="loc-rack" placeholder="Rak 1" required class="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 text-slate-900 font-medium focus:ring-2 focus:ring-blue-500 outline-none">
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="block font-semibold text-slate-700 mb-1">Tingkat (Tier)</label>
+                        <input type="text" id="loc-tier" placeholder="Tingkat 1" required class="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 text-slate-900 font-medium focus:ring-2 focus:ring-blue-500 outline-none">
+                    </div>
+                    <div>
+                        <label class="block font-semibold text-slate-700 mb-1">Bin</label>
+                        <input type="text" id="loc-bin" placeholder="Bin 01" required class="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 text-slate-900 font-medium focus:ring-2 focus:ring-blue-500 outline-none">
+                    </div>
+                </div>
+                <div>
+                    <label class="block font-semibold text-slate-700 mb-1">Deskripsi Tambahan</label>
+                    <input type="text" id="loc-desc" placeholder="Spesifikasi suhu / beban maksimal" class="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 text-slate-900 font-medium focus:ring-2 focus:ring-blue-500 outline-none">
+                </div>
+                <div class="flex justify-end gap-2 pt-3 border-t border-slate-100">
+                    <button type="button" onclick="closeModal('modal-add-location')" class="px-4 py-2 rounded-xl bg-slate-100 text-slate-700 font-medium hover:bg-slate-200">Batal</button>
+                    <button type="submit" class="px-4 py-2 rounded-xl bg-blue-600 text-white font-medium hover:bg-blue-700">Daftarkan Lokasi</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal 10: Bulk Import Master SKU (CSV) -->
+    <div id="modal-import-products-csv" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-xl w-full p-6 relative">
+            <div class="flex items-center justify-between pb-3 border-b border-slate-100 mb-4">
+                <div>
+                    <h3 class="text-base font-bold text-slate-900">Impor Massal Master SKU Produk (CSV)</h3>
+                    <p class="text-xs text-slate-500">Unggah file atau tempel teks spreadsheet CSV untuk menambah/memperbarui katalog produk.</p>
+                </div>
+                <button onclick="closeModal('modal-import-products-csv')" class="text-slate-400 hover:text-slate-700 text-xl font-bold">&times;</button>
+            </div>
+
+            <div class="space-y-3 text-xs">
+                <div class="flex items-center justify-between bg-blue-50/70 border border-blue-200 p-3 rounded-xl">
+                    <div>
+                        <span class="font-bold text-blue-900 block">Butuh contoh format spreadsheet?</span>
+                        <span class="text-blue-700 text-[11px]">Gunakan template resmi dengan kolom: sku, nama_produk, kategori, satuan, safety_stock, hpp, deskripsi</span>
+                    </div>
+                    <button type="button" onclick="downloadProductCsvTemplate()" class="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold text-[11px] whitespace-nowrap shadow-xs">
+                        Unduh Template
+                    </button>
+                </div>
+
+                <div>
+                    <label class="block font-semibold text-slate-700 mb-1">Pilih File CSV dari Komputer</label>
+                    <input type="file" id="csv-file-products" accept=".csv,text/csv,text/plain" onchange="handleProductCsvFileSelect(event)" class="w-full text-xs text-slate-600 file:mr-3 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-slate-100 file:text-slate-700 hover:file:bg-slate-200 cursor-pointer">
+                </div>
+
+                <div>
+                    <label class="block font-semibold text-slate-700 mb-1">Atau Tempel Teks CSV Secara Langsung</label>
+                    <textarea id="csv-text-products" rows="5" oninput="previewProductCsvText()" placeholder="sku,nama_produk,kategori,satuan,safety_stock,hpp,deskripsi&#10;PRD-BULK-01,Tepung Terigu 1Kg,Bahan Pokok,Sak,20,12000,Kemasan tebal" class="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 text-slate-900 font-mono text-[11px] focus:ring-2 focus:ring-blue-500 outline-none"></textarea>
+                </div>
+
+                <!-- Preview Box -->
+                <div id="csv-preview-products-wrap" class="hidden border border-slate-200 rounded-xl p-3 bg-slate-50/60">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="font-bold text-slate-800 text-xs" id="csv-preview-products-count">0 Baris Terdeteksi</span>
+                        <span class="text-[10px] text-emerald-600 font-bold bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">Format Valid</span>
+                    </div>
+                    <div class="max-h-32 overflow-y-auto overflow-x-auto text-[10px]">
+                        <table class="w-full text-left" id="csv-preview-products-table">
+                            <thead class="text-slate-500 border-b border-slate-200 sticky top-0 bg-slate-50"></thead>
+                            <tbody class="divide-y divide-slate-100 font-mono"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="flex justify-end gap-2 pt-3 border-t border-slate-100">
+                    <button type="button" onclick="closeModal('modal-import-products-csv')" class="px-4 py-2 rounded-xl bg-slate-100 text-slate-700 font-medium hover:bg-slate-200">Batal</button>
+                    <button type="button" onclick="submitImportProductsCsv()" id="btn-submit-import-products" class="px-4 py-2 rounded-xl bg-blue-600 text-white font-medium hover:bg-blue-700 shadow-sm flex items-center gap-1.5">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
+                        Mulai Impor Produk
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal 11: Bulk Import Inbound Manifest (CSV) -->
+    <div id="modal-import-inbound-csv" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-xl w-full p-6 relative">
+            <div class="flex items-center justify-between pb-3 border-b border-slate-100 mb-4">
+                <div>
+                    <h3 class="text-base font-bold text-slate-900">Impor Manifest Inbound Pasokan (CSV)</h3>
+                    <p class="text-xs text-slate-500">Catat penerimaan banyak batch sekaligus ke lokasi rak gudang dari file manifest pasokan.</p>
+                </div>
+                <button onclick="closeModal('modal-import-inbound-csv')" class="text-slate-400 hover:text-slate-700 text-xl font-bold">&times;</button>
+            </div>
+
+            <div class="space-y-3 text-xs">
+                <div class="flex items-center justify-between bg-emerald-50/70 border border-emerald-200 p-3 rounded-xl">
+                    <div>
+                        <span class="font-bold text-emerald-900 block">Template Manifest Pasokan Gudang</span>
+                        <span class="text-emerald-700 text-[11px]">Kolom: sku, qty, expired_date, batch_code, location_code, supplier_code, notes</span>
+                    </div>
+                    <button type="button" onclick="downloadInboundCsvTemplate()" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold text-[11px] whitespace-nowrap shadow-xs">
+                        Unduh Template
+                    </button>
+                </div>
+
+                <div>
+                    <label class="block font-semibold text-slate-700 mb-1">Pilih File Manifest CSV</label>
+                    <input type="file" id="csv-file-inbound" accept=".csv,text/csv,text/plain" onchange="handleInboundCsvFileSelect(event)" class="w-full text-xs text-slate-600 file:mr-3 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-slate-100 file:text-slate-700 hover:file:bg-slate-200 cursor-pointer">
+                </div>
+
+                <div>
+                    <label class="block font-semibold text-slate-700 mb-1">Atau Tempel Teks Manifest CSV</label>
+                    <textarea id="csv-text-inbound" rows="5" oninput="previewInboundCsvText()" placeholder="sku,qty,expired_date,batch_code,location_code,supplier_code,notes&#10;PRD-FEED-01,50,2026-12-31,BTC-IMP-001,A-01-01,SUP-CJ-01,Pasokan kontainer A" class="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 text-slate-900 font-mono text-[11px] focus:ring-2 focus:ring-emerald-500 outline-none"></textarea>
+                </div>
+
+                <!-- Preview Box -->
+                <div id="csv-preview-inbound-wrap" class="hidden border border-slate-200 rounded-xl p-3 bg-slate-50/60">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="font-bold text-slate-800 text-xs" id="csv-preview-inbound-count">0 Batch Terdeteksi</span>
+                        <span class="text-[10px] text-emerald-600 font-bold bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">Manifest Siap</span>
+                    </div>
+                    <div class="max-h-32 overflow-y-auto overflow-x-auto text-[10px]">
+                        <table class="w-full text-left" id="csv-preview-inbound-table">
+                            <thead class="text-slate-500 border-b border-slate-200 sticky top-0 bg-slate-50"></thead>
+                            <tbody class="divide-y divide-slate-100 font-mono"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="flex justify-end gap-2 pt-3 border-t border-slate-100">
+                    <button type="button" onclick="closeModal('modal-import-inbound-csv')" class="px-4 py-2 rounded-xl bg-slate-100 text-slate-700 font-medium hover:bg-slate-200">Batal</button>
+                    <button type="button" onclick="submitImportInboundCsv()" id="btn-submit-import-inbound" class="px-4 py-2 rounded-xl bg-emerald-600 text-white font-medium hover:bg-emerald-700 shadow-sm flex items-center gap-1.5">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 11l5-5m0 0l5 5m-5-5v12"/></svg>
+                        Mulai Impor Manifest
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal 12: Stock Card Ledger (Kartu Stok Persediaan) -->
+    <div id="modal-stock-card" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-4xl w-full p-6 relative max-h-[90vh] flex flex-col">
+            <div class="flex items-center justify-between pb-3 border-b border-slate-100">
+                <div>
+                    <span class="text-[10px] font-bold uppercase tracking-wider text-purple-700 bg-purple-50 px-2.5 py-0.5 rounded border border-purple-200">Audit Persediaan & Ledger</span>
+                    <h3 class="text-base font-bold text-slate-900 mt-1" id="sc-modal-title">Kartu Stok Persediaan</h3>
+                    <p class="text-xs text-slate-500" id="sc-modal-sub">Rekonsiliasi saldo berjalan historis per produk SKU</p>
+                </div>
+                <button onclick="closeModal('modal-stock-card')" class="text-slate-400 hover:text-slate-700 text-xl font-bold">&times;</button>
+            </div>
+
+            <input type="hidden" id="sc-product-id">
+
+            <!-- Filter Periode & Action Buttons -->
+            <div class="flex flex-wrap items-center justify-between gap-3 py-3 border-b border-slate-100 text-xs">
+                <div class="flex items-center gap-2">
+                    <div>
+                        <label class="block text-[10px] font-bold text-slate-500 uppercase">Dari Tanggal:</label>
+                        <input type="date" id="sc-start-date" class="bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1 text-slate-800 outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-bold text-slate-500 uppercase">Sampai Tanggal:</label>
+                        <input type="date" id="sc-end-date" class="bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1 text-slate-800 outline-none">
+                    </div>
+                    <button onclick="loadStockCardReport()" class="mt-3.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold text-xs shadow-xs transition">
+                        Terapkan
+                    </button>
+                </div>
+
+                <div class="flex items-center gap-2 mt-3.5">
+                    <button onclick="exportStockCardToCSV()" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold text-xs flex items-center gap-1.5 shadow-xs transition" title="Unduh Buku Pembantu Kartu Stok Format Spreadsheet CSV">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+                        Ekspor CSV
+                    </button>
+                    <button onclick="printCurrentStockCard()" class="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-bold text-xs flex items-center gap-1.5 shadow-xs transition" title="Cetak Kartu Stok ke Kertas A4">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/></svg>
+                        Cetak Kartu Stok
+                    </button>
+                </div>
+            </div>
+
+            <!-- KPI Summary Bar -->
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 my-3 text-xs">
+                <div class="p-2.5 rounded-xl bg-slate-50 border border-slate-200">
+                    <span class="text-[10px] uppercase font-bold text-slate-400 block">Saldo Awal</span>
+                    <span class="text-base font-extrabold text-slate-800" id="sc-kpi-beg">0 Unit</span>
+                </div>
+                <div class="p-2.5 rounded-xl bg-emerald-50/60 border border-emerald-200">
+                    <span class="text-[10px] uppercase font-bold text-emerald-700 block">Total Masuk (+)</span>
+                    <span class="text-base font-extrabold text-emerald-600" id="sc-kpi-in">+0 Unit</span>
+                </div>
+                <div class="p-2.5 rounded-xl bg-rose-50/60 border border-rose-200">
+                    <span class="text-[10px] uppercase font-bold text-rose-700 block">Total Keluar (-)</span>
+                    <span class="text-base font-extrabold text-rose-600" id="sc-kpi-out">-0 Unit</span>
+                </div>
+                <div class="p-2.5 rounded-xl bg-blue-50/60 border border-blue-200">
+                    <span class="text-[10px] uppercase font-bold text-blue-700 block">Saldo Akhir</span>
+                    <span class="text-base font-extrabold text-blue-700" id="sc-kpi-end">0 Unit</span>
+                </div>
+            </div>
+
+            <!-- Ledger Table Container -->
+            <div class="overflow-y-auto flex-1 border border-slate-200 rounded-xl text-xs">
+                <table class="w-full text-left">
+                    <thead class="bg-slate-100 text-slate-600 font-semibold uppercase text-[10px] tracking-wider sticky top-0 border-b border-slate-200">
+                        <tr>
+                            <th class="p-3">Waktu</th>
+                            <th class="p-3">No. Referensi</th>
+                            <th class="p-3">Mutasi / Catatan</th>
+                            <th class="p-3 text-right">Masuk (+)</th>
+                            <th class="p-3 text-right">Keluar (-)</th>
+                            <th class="p-3 text-right">Saldo Berjalan</th>
+                            <th class="p-3 text-center">Operator</th>
+                        </tr>
+                    </thead>
+                    <tbody id="sc-ledger-tbody" class="divide-y divide-slate-100">
+                        <tr><td colspan="7" class="p-6 text-center text-slate-400">Memuat mutasi kartu stok...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="flex justify-end pt-3 border-t border-slate-100 mt-3">
+                <button type="button" onclick="closeModal('modal-stock-card')" class="px-4 py-2 rounded-xl bg-slate-100 text-slate-700 font-medium hover:bg-slate-200 text-xs">Tutup</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal 13: System Diagnostics & Database Backup -->
+    <div id="modal-system-diagnostics" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-3xl w-full p-6 relative max-h-[90vh] flex flex-col">
+            <div class="flex items-center justify-between pb-3 border-b border-slate-100 mb-4">
+                <div>
+                    <span class="text-[10px] font-bold uppercase tracking-wider text-indigo-700 bg-indigo-50 px-2.5 py-0.5 rounded border border-indigo-200">Keamanan & Keandalan Sistem</span>
+                    <h3 class="text-base font-bold text-slate-900 mt-1">Diagnostik Integritas Stok & Cadangan Database</h3>
+                    <p class="text-xs text-slate-500">Verifikasi referensial, anomali saldo master vs batch, dan snapshot database berkala.</p>
+                </div>
+                <button onclick="closeModal('modal-system-diagnostics')" class="text-slate-400 hover:text-slate-700 text-xl font-bold">&times;</button>
+            </div>
+
+            <div class="overflow-y-auto space-y-4 flex-1 text-xs pr-1">
+                <!-- Health Banner -->
+                <div class="p-4 rounded-xl border flex flex-col sm:flex-row items-center justify-between gap-4 bg-slate-50" id="diag-banner-box">
+                    <div class="flex items-center gap-3">
+                        <div class="w-12 h-12 rounded-xl flex items-center justify-center font-black text-lg shadow-sm" id="diag-score-circle">
+                            100%
+                        </div>
+                        <div>
+                            <div class="flex items-center gap-2">
+                                <h4 class="font-bold text-sm text-slate-900" id="diag-status-title">Memeriksa Integritas Sistem...</h4>
+                                <span class="px-2 py-0.5 rounded text-[10px] font-bold" id="diag-status-badge">PENGECEKAN</span>
+                            </div>
+                            <p class="text-xs text-slate-500 mt-0.5" id="diag-status-desc">Menjalankan 6 aturan validasi integritas database & konsistensi stok...</p>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-2 shrink-0">
+                        <button onclick="loadSystemDiagnostics()" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg font-bold text-xs flex items-center gap-1.5 transition">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                            Audit Ulang
+                        </button>
+                        <button onclick="triggerDatabaseBackup()" id="btn-trigger-backup" class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-bold text-xs flex items-center gap-1.5 shadow-sm transition">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"/></svg>
+                            Buat Backup Sekarang
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 6 Diagnostic Checks Grid -->
+                <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                    <div class="p-3 rounded-xl border border-slate-200 bg-white">
+                        <span class="text-[10px] text-slate-400 font-bold uppercase block">Stok Master vs Batch</span>
+                        <span class="text-sm font-bold text-emerald-600 mt-1 block" id="diag-check-discrepancy">0 Selisih (Konsisten)</span>
+                    </div>
+                    <div class="p-3 rounded-xl border border-slate-200 bg-white">
+                        <span class="text-[10px] text-slate-400 font-bold uppercase block">Kuantitas Negatif</span>
+                        <span class="text-sm font-bold text-emerald-600 mt-1 block" id="diag-check-negative">0 Terdeteksi (Aman)</span>
+                    </div>
+                    <div class="p-3 rounded-xl border border-slate-200 bg-white">
+                        <span class="text-[10px] text-slate-400 font-bold uppercase block">Batch Yatim (Orphan)</span>
+                        <span class="text-sm font-bold text-emerald-600 mt-1 block" id="diag-check-orphaned-batches">0 Batch (Valid)</span>
+                    </div>
+                    <div class="p-3 rounded-xl border border-slate-200 bg-white">
+                        <span class="text-[10px] text-slate-400 font-bold uppercase block">Item Mutasi Yatim</span>
+                        <span class="text-sm font-bold text-emerald-600 mt-1 block" id="diag-check-orphaned-items">0 Item (Valid)</span>
+                    </div>
+                    <div class="p-3 rounded-xl border border-slate-200 bg-white">
+                        <span class="text-[10px] text-slate-400 font-bold uppercase block">Batch Expired Aktif</span>
+                        <span class="text-sm font-bold text-slate-700 mt-1 block" id="diag-check-expired">0 Batch</span>
+                    </div>
+                    <div class="p-3 rounded-xl border border-slate-200 bg-white">
+                        <span class="text-[10px] text-slate-400 font-bold uppercase block">Batch Tanpa Rak</span>
+                        <span class="text-sm font-bold text-slate-700 mt-1 block" id="diag-check-locations">0 Batch</span>
+                    </div>
+                </div>
+
+                <!-- Backups History Table -->
+                <div class="border border-slate-200 rounded-xl overflow-hidden bg-white">
+                    <div class="p-3 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+                        <span class="font-bold text-slate-800 text-xs">Berkas Cadangan Snapshot Tersimpan</span>
+                        <span class="text-[10px] text-slate-500 font-mono" id="diag-backup-count">0 File Cadangan</span>
+                    </div>
+                    <div class="max-h-48 overflow-y-auto">
+                        <table class="w-full text-left">
+                            <thead class="bg-slate-100 text-slate-500 text-[10px] uppercase font-semibold border-b border-slate-200">
+                                <tr>
+                                    <th class="p-2.5">Nama Berkas</th>
+                                    <th class="p-2.5">Ukuran</th>
+                                    <th class="p-2.5">Waktu Pencadangan</th>
+                                    <th class="p-2.5 text-right">Aksi</th>
+                                </tr>
+                            </thead>
+                            <tbody id="diag-backups-tbody" class="divide-y divide-slate-100 font-mono text-[11px]">
+                                <tr><td colspan="4" class="p-4 text-center text-slate-400 font-sans">Memuat daftar cadangan...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex justify-end pt-3 border-t border-slate-100 mt-3">
+                <button type="button" onclick="closeModal('modal-system-diagnostics')" class="px-4 py-2 rounded-xl bg-slate-100 text-slate-700 font-medium hover:bg-slate-200 text-xs">Tutup</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal 14: Create Inter-Warehouse Transfer -->
+    <div id="modal-create-transfer" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-lg w-full p-6 relative">
+            <div class="flex items-center justify-between pb-3 border-b border-slate-100 mb-4">
+                <div>
+                    <span class="text-[10px] font-bold uppercase tracking-wider text-indigo-700 bg-indigo-50 px-2.5 py-0.5 rounded border border-indigo-200">Logistik Multi-Gudang</span>
+                    <h3 class="text-base font-bold text-slate-900 mt-1">Perintah Transfer Stok Antar-Gudang</h3>
+                    <p class="text-xs text-slate-500">Keluarkan stok dari gudang asal menggunakan alokasi FEFO menuju gudang tujuan.</p>
+                </div>
+                <button onclick="closeModal('modal-create-transfer')" class="text-slate-400 hover:text-slate-700 text-xl font-bold">&times;</button>
+            </div>
+
+            <form id="form-create-transfer" onsubmit="handleCreateTransfer(event)" class="space-y-3.5 text-xs">
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block font-semibold text-slate-700 mb-1">Gudang Asal (Pengirim)</label>
+                        <select id="trf-source-facility" required onchange="handleSourceFacilityChange()" class="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 text-slate-900 font-medium focus:ring-2 focus:ring-indigo-500 outline-none">
+                            <option value="">Pilih Gudang Asal...</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block font-semibold text-slate-700 mb-1">Gudang Tujuan (Penerima)</label>
+                        <select id="trf-dest-facility" required class="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 text-slate-900 font-medium focus:ring-2 focus:ring-indigo-500 outline-none">
+                            <option value="">Pilih Gudang Tujuan...</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block font-semibold text-slate-700 mb-1">Pilih Produk SKU</label>
+                    <select id="trf-product-id" required class="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 text-slate-900 font-medium focus:ring-2 focus:ring-indigo-500 outline-none">
+                        <option value="">Pilih Produk...</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block font-semibold text-slate-700 mb-1">Jumlah Unit yang Dipindahkan</label>
+                    <input type="number" id="trf-quantity" min="1" required placeholder="Contoh: 30" class="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 text-slate-900 font-medium focus:ring-2 focus:ring-indigo-500 outline-none">
+                </div>
+
+                <div>
+                    <label class="block font-semibold text-slate-700 mb-1">Catatan Pengiriman / Info Armada</label>
+                    <input type="text" id="trf-notes" placeholder="Contoh: Truk CDD Plat B 9876 KIM, Ekspedisi Rantai Dingin" class="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 text-slate-900 font-medium focus:ring-2 focus:ring-indigo-500 outline-none">
+                </div>
+
+                <div class="p-3 bg-amber-50/70 border border-amber-200 rounded-xl text-[11px] text-amber-800">
+                    <p class="font-bold flex items-center gap-1">
+                        <svg class="w-3.5 h-3.5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                        Aturan Stok In-Transit:
+                    </p>
+                    <p class="mt-0.5">Stok yang dipindahkan akan dipotong dari batch terdekat kedaluwarsa (FEFO) di gudang asal dan berstatus <b>IN_TRANSIT</b> hingga dikonfirmasi tiba di gudang tujuan.</p>
+                </div>
+
+                <div class="flex justify-end gap-2 pt-3 border-t border-slate-100">
+                    <button type="button" onclick="closeModal('modal-create-transfer')" class="px-4 py-2 rounded-xl bg-slate-100 text-slate-700 font-medium hover:bg-slate-200">Batal</button>
+                    <button type="submit" id="btn-submit-transfer" class="px-4 py-2 rounded-xl bg-indigo-600 text-white font-medium hover:bg-indigo-700 shadow-sm flex items-center gap-1.5">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/></svg>
+                        Mulai Pengiriman (In-Transit)
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal 15: Receive Inter-Warehouse Transfer (Support Partial Receipt) -->
+    <div id="modal-receive-transfer" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-2xl w-full p-6 relative max-h-[90vh] flex flex-col">
+            <div class="flex items-center justify-between pb-3 border-b border-slate-100 mb-3">
+                <div>
+                    <span class="text-[10px] font-bold uppercase tracking-wider text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded border border-emerald-200">Penerimaan Barang Masuk</span>
+                    <h3 class="text-base font-bold text-slate-900 mt-1" id="rcv-modal-title">Konfirmasi Penerimaan Transfer</h3>
+                    <p class="text-xs text-slate-500" id="rcv-modal-sub">Verifikasi fisik barang tiba di fasilitas tujuan dan tempatkan ke rak.</p>
+                </div>
+                <button onclick="closeModal('modal-receive-transfer')" class="text-slate-400 hover:text-slate-700 text-xl font-bold">&times;</button>
+            </div>
+
+            <input type="hidden" id="rcv-transfer-id">
+
+            <div class="overflow-y-auto space-y-3 flex-1 text-xs pr-1">
+                <div class="p-3 bg-slate-50 rounded-xl border border-slate-200 flex items-center justify-between text-xs">
+                    <div>
+                        <span class="text-slate-400 block text-[10px] font-bold uppercase">No. Dokumen / Surat Jalan</span>
+                        <span class="font-mono font-bold text-indigo-700 text-sm" id="rcv-transfer-number">TRF-20261103-XXXX</span>
+                    </div>
+                    <div class="text-right">
+                        <span class="text-slate-400 block text-[10px] font-bold uppercase">Rute Transfer</span>
+                        <span class="font-bold text-slate-800" id="rcv-route-info">Gudang Asal &rarr; Gudang Tujuan</span>
+                    </div>
+                </div>
+
+                <div class="border border-slate-200 rounded-xl overflow-hidden bg-white">
+                    <div class="p-2.5 bg-slate-100 border-b border-slate-200 font-bold text-slate-800 text-[11px]">
+                        Daftar Batch yang Dikirim & Input Kuantitas Diterima:
+                    </div>
+                    <div class="max-h-56 overflow-y-auto">
+                        <table class="w-full text-left">
+                            <thead class="bg-slate-50 text-[10px] uppercase font-bold text-slate-500 border-b border-slate-200">
+                                <tr>
+                                    <th class="p-2.5">Produk & Batch</th>
+                                    <th class="p-2.5 text-center">Tgl Expired (FEFO)</th>
+                                    <th class="p-2.5 text-center">Dikirim</th>
+                                    <th class="p-2.5 text-center w-28">Diterima Fisik</th>
+                                    <th class="p-2.5">Catatan Selisih (Jika Kurang)</th>
+                                </tr>
+                            </thead>
+                            <tbody id="rcv-items-tbody" class="divide-y divide-slate-100 text-xs">
+                                <tr><td colspan="5" class="p-4 text-center text-slate-400">Memuat rincian item transfer...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block font-semibold text-slate-700 mb-1">Pilih Lokasi Rak Penempatan di Gudang Tujuan</label>
+                    <select id="rcv-destination-location" required class="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 text-slate-900 font-medium focus:ring-2 focus:ring-emerald-500 outline-none">
+                        <option value="">Pilih Lokasi Rak...</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block font-semibold text-slate-700 mb-1">Catatan Berita Acara Penerimaan (Opsional)</label>
+                    <input type="text" id="rcv-notes" placeholder="Contoh: Barang tiba kondisi baik, suhu freezer terpelihara -18C" class="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 text-slate-900 font-medium focus:ring-2 focus:ring-emerald-500 outline-none">
+                </div>
+            </div>
+
+            <div class="flex justify-end gap-2 pt-3 border-t border-slate-100 mt-3">
+                <button type="button" onclick="closeModal('modal-receive-transfer')" class="px-4 py-2 rounded-xl bg-slate-100 text-slate-700 font-medium hover:bg-slate-200 text-xs">Batal</button>
+                <button type="button" onclick="submitReceiveTransfer()" id="btn-submit-receive-trf" class="px-4 py-2 rounded-xl bg-emerald-600 text-white font-medium hover:bg-emerald-700 shadow-sm text-xs flex items-center gap-1.5">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                    Konfirmasi Penerimaan Barang
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal 16: Inter-Warehouse Transfer Detail View -->
+    <div id="modal-transfer-detail" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-2xl w-full p-6 relative max-h-[90vh] flex flex-col">
+            <div class="flex items-center justify-between pb-3 border-b border-slate-100 mb-3">
+                <div>
+                    <span class="text-[10px] font-bold uppercase tracking-wider text-purple-700 bg-purple-50 px-2.5 py-0.5 rounded border border-purple-200">Rincian Dokumen Transfer</span>
+                    <h3 class="text-base font-bold text-slate-900 mt-1" id="dtl-transfer-number">TRF-20261103-XXXX</h3>
+                    <p class="text-xs text-slate-500" id="dtl-transfer-subtitle">Surat Jalan Pemindahan Stok Antar-Gudang</p>
+                </div>
+                <button onclick="closeModal('modal-transfer-detail')" class="text-slate-400 hover:text-slate-700 text-xl font-bold">&times;</button>
+            </div>
+
+            <div class="overflow-y-auto space-y-3 flex-1 text-xs pr-1">
+                <!-- Status & Route Banner -->
+                <div class="p-3 bg-slate-50 rounded-xl border border-slate-200 grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                    <div>
+                        <span class="text-[10px] font-bold text-slate-400 uppercase block">Gudang Asal</span>
+                        <span class="font-bold text-slate-800" id="dtl-source-facility">-</span>
+                    </div>
+                    <div>
+                        <span class="text-[10px] font-bold text-slate-400 uppercase block">Gudang Tujuan</span>
+                        <span class="font-bold text-slate-800" id="dtl-dest-facility">-</span>
+                    </div>
+                    <div>
+                        <span class="text-[10px] font-bold text-slate-400 uppercase block">Status Transfer</span>
+                        <span class="px-2 py-0.5 rounded text-[10px] font-bold inline-block" id="dtl-status-badge">IN_TRANSIT</span>
+                    </div>
+                    <div>
+                        <span class="text-[10px] font-bold text-slate-400 uppercase block">Total Unit</span>
+                        <span class="font-extrabold text-indigo-700" id="dtl-qty-info">0 Dikirim / 0 Diterima</span>
+                    </div>
+                </div>
+
+                <!-- Items Breakdown -->
+                <div class="border border-slate-200 rounded-xl overflow-hidden bg-white">
+                    <div class="p-2.5 bg-slate-100 border-b border-slate-200 font-bold text-slate-800 text-[11px]">
+                        Rincian Batch yang Dipindahkan:
+                    </div>
+                    <div class="max-h-56 overflow-y-auto">
+                        <table class="w-full text-left">
+                            <thead class="bg-slate-50 text-[10px] uppercase font-bold text-slate-500 border-b border-slate-200">
+                                <tr>
+                                    <th class="p-2.5">Produk</th>
+                                    <th class="p-2.5">Batch Code</th>
+                                    <th class="p-2.5 text-center">Exp. Date</th>
+                                    <th class="p-2.5 text-right">Dikirim</th>
+                                    <th class="p-2.5 text-right">Diterima</th>
+                                    <th class="p-2.5 text-right">Selisih</th>
+                                </tr>
+                            </thead>
+                            <tbody id="dtl-items-tbody" class="divide-y divide-slate-100 font-mono text-xs">
+                                <tr><td colspan="6" class="p-4 text-center text-slate-400 font-sans">Memuat rincian item...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-1 text-slate-600">
+                    <p><b>Catatan Pengiriman:</b> <span id="dtl-notes">-</span></p>
+                    <p id="dtl-cancel-box" class="hidden text-rose-600 font-medium"><b>Alasan Pembatalan:</b> <span id="dtl-cancel-reason">-</span></p>
+                </div>
+            </div>
+
+            <div class="flex items-center justify-between pt-3 border-t border-slate-100 mt-3">
+                <button type="button" onclick="printCurrentTransferDetail()" class="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 shadow-sm transition">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/></svg>
+                    Cetak Surat Jalan Transfer (A4)
+                </button>
+                <button type="button" onclick="closeModal('modal-transfer-detail')" class="px-4 py-2 rounded-xl bg-slate-100 text-slate-700 font-medium hover:bg-slate-200 text-xs">Tutup</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal 17: Create Purchase Order (PO) -->
+    <div id="modal-create-po" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-2xl w-full p-6 relative max-h-[90vh] flex flex-col">
+            <div class="flex items-center justify-between pb-3 border-b border-slate-100 mb-3">
+                <div>
+                    <span class="text-[10px] font-bold uppercase tracking-wider text-blue-700 bg-blue-50 px-2.5 py-0.5 rounded border border-blue-200">Pengadaan Barang (Procurement)</span>
+                    <h3 class="text-base font-bold text-slate-900 mt-1">Buat Purchase Order Baru</h3>
+                </div>
+                <button onclick="closeModal('modal-create-po')" class="text-slate-400 hover:text-slate-700 text-xl font-bold">&times;</button>
+            </div>
+
+            <form id="form-create-po" onsubmit="handleCreatePurchaseOrder(event)" class="space-y-3.5 text-xs overflow-y-auto flex-1 pr-1">
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div>
+                        <label class="block font-semibold text-slate-700 mb-1">Pemasok (Vendor) *</label>
+                        <select id="po-supplier-id" required class="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 outline-none">
+                            <option value="">Pilih Vendor...</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block font-semibold text-slate-700 mb-1">Gudang Tujuan *</label>
+                        <select id="po-facility-id" required class="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 outline-none">
+                            <option value="">Pilih Gudang...</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block font-semibold text-slate-700 mb-1">Ekspektasi Tanggal Tiba</label>
+                        <input type="date" id="po-expected-date" class="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 outline-none">
+                    </div>
+                </div>
+
+                <div class="border border-slate-200 rounded-xl p-3 bg-slate-50/50 space-y-2">
+                    <div class="flex items-center justify-between">
+                        <span class="font-bold text-slate-800 text-xs">Daftar Item Barang Dipesan:</span>
+                        <button type="button" onclick="addPoItemRow()" class="px-2.5 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold rounded-lg transition border border-blue-200 text-[11px] flex items-center gap-1">
+                            + Tambah Baris Produk
+                        </button>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left text-xs">
+                            <thead class="text-[10px] text-slate-400 uppercase font-semibold">
+                                <tr>
+                                    <th class="p-1.5">Produk SKU</th>
+                                    <th class="p-1.5 w-24">Jumlah</th>
+                                    <th class="p-1.5 w-32">Harga Satuan (Rp)</th>
+                                    <th class="p-1.5 w-32 text-right">Subtotal</th>
+                                    <th class="p-1.5 w-10 text-center"></th>
+                                </tr>
+                            </thead>
+                            <tbody id="po-items-table-body" class="divide-y divide-slate-100"></tbody>
+                        </table>
+                    </div>
+                    <div class="flex justify-end pt-2 border-t border-slate-200">
+                        <span class="font-bold text-slate-700 mr-2">Estimasi Total Nilai PO:</span>
+                        <span class="font-extrabold text-blue-700 font-mono text-sm" id="po-total-calc-display">Rp 0</span>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block font-semibold text-slate-700 mb-1">Catatan Pesanan</label>
+                    <textarea id="po-notes" rows="2" placeholder="Catatan instruksi khusus bagi pemasok atau staf penerima..." class="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 outline-none"></textarea>
+                </div>
+
+                <div class="flex justify-end gap-2 pt-3 border-t border-slate-100">
+                    <button type="button" onclick="closeModal('modal-create-po')" class="px-4 py-2 rounded-xl bg-slate-100 text-slate-700 font-medium hover:bg-slate-200">Batal</button>
+                    <button type="submit" id="btn-submit-po" class="px-4 py-2 rounded-xl bg-blue-600 text-white font-medium hover:bg-blue-700 shadow-sm flex items-center gap-1.5">
+                        Simpan Purchase Order (Draft)
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal 18: Receive Purchase Order (Inbound GRN) -->
+    <div id="modal-receive-po" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-2xl w-full p-6 relative max-h-[90vh] flex flex-col">
+            <div class="flex items-center justify-between pb-3 border-b border-slate-100 mb-3">
+                <div>
+                    <span class="text-[10px] font-bold uppercase tracking-wider text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded border border-emerald-200">Penerimaan Inbound PO</span>
+                    <h3 class="text-base font-bold text-slate-900 mt-1" id="rcv-po-title">Terima Barang Masuk dari PO</h3>
+                </div>
+                <button onclick="closeModal('modal-receive-po')" class="text-slate-400 hover:text-slate-700 text-xl font-bold">&times;</button>
+            </div>
+
+            <input type="hidden" id="rcv-po-id">
+
+            <div class="overflow-y-auto space-y-3 flex-1 text-xs pr-1">
+                <div class="p-3 bg-slate-50 rounded-xl border border-slate-200 flex items-center justify-between">
+                    <div>
+                        <span class="text-[10px] font-bold text-slate-400 uppercase">Nomor PO</span>
+                        <span class="font-mono font-bold text-blue-700 text-sm block" id="rcv-po-number">PO-XXXX</span>
+                    </div>
+                    <div>
+                        <span class="text-[10px] font-bold text-slate-400 uppercase">Pemasok</span>
+                        <span class="font-bold text-slate-800 block" id="rcv-po-supplier">PT Supplier</span>
+                    </div>
+                    <div class="text-right">
+                        <span class="text-[10px] font-bold text-slate-400 uppercase">Fasilitas Tujuan</span>
+                        <span class="font-bold text-slate-800 block" id="rcv-po-facility">Gudang Cakung</span>
+                    </div>
+                </div>
+
+                <div class="border border-slate-200 rounded-xl overflow-hidden bg-white">
+                    <div class="p-2.5 bg-slate-100 border-b border-slate-200 font-bold text-slate-800 text-[11px]">
+                        Verifikasi Barang Fisik & Input Batch Masuk:
+                    </div>
+                    <div class="max-h-60 overflow-y-auto">
+                        <table class="w-full text-left">
+                            <thead class="bg-slate-50 text-[10px] uppercase font-bold text-slate-500 border-b border-slate-200">
+                                <tr>
+                                    <th class="p-2.5">Produk & SKU</th>
+                                    <th class="p-2.5 text-center">Sisa Pesanan</th>
+                                    <th class="p-2.5 text-center w-24">Jumlah Tiba</th>
+                                    <th class="p-2.5 w-32">Lokasi Rak</th>
+                                    <th class="p-2.5 w-28">Exp. Date (FEFO)</th>
+                                </tr>
+                            </thead>
+                            <tbody id="rcv-po-items-tbody" class="divide-y divide-slate-100 text-xs"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block font-semibold text-slate-700 mb-1">Catatan Penerimaan / No. Surat Jalan Vendor</label>
+                    <input type="text" id="rcv-po-notes" placeholder="Contoh: Diterima sesuai Surat Jalan Vendor No. 12345/SJ..." class="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 outline-none">
+                </div>
+            </div>
+
+            <div class="flex justify-end gap-2 pt-3 border-t border-slate-100 mt-3">
+                <button type="button" onclick="closeModal('modal-receive-po')" class="px-4 py-2 rounded-xl bg-slate-100 text-slate-700 font-medium hover:bg-slate-200 text-xs">Batal</button>
+                <button type="button" id="btn-submit-receive-po" onclick="submitReceivePurchaseOrder()" class="px-4 py-2 rounded-xl bg-emerald-600 text-white font-medium hover:bg-emerald-700 shadow-sm text-xs flex items-center gap-1.5">
+                    Proses Masuk Gudang (Otomatis Buat Batch & GRN)
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal 19: Detail Purchase Order -->
+    <div id="modal-po-detail" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-2xl w-full p-6 relative max-h-[90vh] flex flex-col">
+            <div class="flex items-center justify-between pb-3 border-b border-slate-100 mb-3">
+                <div>
+                    <span class="text-[10px] font-bold uppercase tracking-wider text-blue-700 bg-blue-50 px-2.5 py-0.5 rounded border border-blue-200">Rincian Dokumen PO</span>
+                    <h3 class="text-base font-bold text-slate-900 mt-1" id="dtl-po-number">PO-XXXX</h3>
+                </div>
+                <button onclick="closeModal('modal-po-detail')" class="text-slate-400 hover:text-slate-700 text-xl font-bold">&times;</button>
+            </div>
+
+            <div class="overflow-y-auto space-y-3 flex-1 text-xs pr-1">
+                <div class="grid grid-cols-2 sm:grid-cols-3 gap-3 p-3 bg-slate-50 rounded-xl border border-slate-200">
+                    <div>
+                        <span class="text-slate-400 text-[10px] font-bold uppercase block">Pemasok (Vendor)</span>
+                        <span class="font-bold text-slate-900" id="dtl-po-supplier">-</span>
+                    </div>
+                    <div>
+                        <span class="text-slate-400 text-[10px] font-bold uppercase block">Gudang Tujuan</span>
+                        <span class="font-bold text-slate-900" id="dtl-po-facility">-</span>
+                    </div>
+                    <div>
+                        <span class="text-slate-400 text-[10px] font-bold uppercase block">Status PO</span>
+                        <span id="dtl-po-status-badge">-</span>
+                    </div>
+                    <div>
+                        <span class="text-slate-400 text-[10px] font-bold uppercase block">Tanggal Pesan</span>
+                        <span class="font-bold text-slate-900" id="dtl-po-date">-</span>
+                    </div>
+                    <div>
+                        <span class="text-slate-400 text-[10px] font-bold uppercase block">Total Nilai Pesanan</span>
+                        <span class="font-extrabold text-blue-700 font-mono" id="dtl-po-total">-</span>
+                    </div>
+                    <div>
+                        <span class="text-slate-400 text-[10px] font-bold uppercase block">Dibuat Oleh</span>
+                        <span class="font-bold text-slate-900" id="dtl-po-creator">-</span>
+                    </div>
+                </div>
+
+                <div class="border border-slate-200 rounded-xl overflow-hidden bg-white">
+                    <div class="p-2.5 bg-slate-100 border-b border-slate-200 font-bold text-slate-800 text-[11px]">
+                        Rincian Item Barang:
+                    </div>
+                    <div class="max-h-52 overflow-y-auto">
+                        <table class="w-full text-left">
+                            <thead class="bg-slate-50 text-[10px] uppercase font-bold text-slate-500 border-b border-slate-200">
+                                <tr>
+                                    <th class="p-2.5">Produk</th>
+                                    <th class="p-2.5 text-right">Dipesan</th>
+                                    <th class="p-2.5 text-right">Diterima</th>
+                                    <th class="p-2.5 text-right">Harga Satuan</th>
+                                    <th class="p-2.5 text-right">Subtotal</th>
+                                </tr>
+                            </thead>
+                            <tbody id="dtl-po-items-tbody" class="divide-y divide-slate-100 text-xs"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="p-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-600">
+                    <p><b>Catatan:</b> <span id="dtl-po-notes">-</span></p>
+                </div>
+            </div>
+
+            <div class="flex items-center justify-between pt-3 border-t border-slate-100 mt-3">
+                <button type="button" onclick="printCurrentPoDocument()" class="px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 shadow-sm transition">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/></svg>
+                    Cetak Purchase Order (A4)
+                </button>
+                <button type="button" onclick="closeModal('modal-po-detail')" class="px-4 py-2 rounded-xl bg-slate-100 text-slate-700 font-medium hover:bg-slate-200 text-xs">Tutup</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal 20: Create Sales Order (SO) -->
+    <div id="modal-create-so" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-2xl w-full p-6 relative max-h-[90vh] flex flex-col">
+            <div class="flex items-center justify-between pb-3 border-b border-slate-100 mb-3">
+                <div>
+                    <span class="text-[10px] font-bold uppercase tracking-wider text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded border border-emerald-200">Pesanan Penjualan (Sales Order)</span>
+                    <h3 class="text-base font-bold text-slate-900 mt-1">Buat Sales Order Baru</h3>
+                </div>
+                <button onclick="closeModal('modal-create-so')" class="text-slate-400 hover:text-slate-700 text-xl font-bold">&times;</button>
+            </div>
+
+            <form id="form-create-so" onsubmit="handleCreateSalesOrder(event)" class="space-y-3.5 text-xs overflow-y-auto flex-1 pr-1">
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div>
+                        <label class="block font-semibold text-slate-700 mb-1">Nama Pelanggan *</label>
+                        <input type="text" id="so-customer-name" required placeholder="Contoh: PT Mitra Sejahtera" class="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 outline-none">
+                    </div>
+                    <div>
+                        <label class="block font-semibold text-slate-700 mb-1">Telepon Pelanggan</label>
+                        <input type="text" id="so-customer-phone" placeholder="0812-xxxx-xxxx" class="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 outline-none">
+                    </div>
+                    <div>
+                        <label class="block font-semibold text-slate-700 mb-1">Gudang Asal *</label>
+                        <select id="so-facility-id" required class="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 outline-none">
+                            <option value="">Pilih Gudang Asal...</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                        <label class="block font-semibold text-slate-700 mb-1">Alamat Pengiriman</label>
+                        <input type="text" id="so-customer-address" placeholder="Jl. Raya Industri Km 12..." class="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 outline-none">
+                    </div>
+                    <div>
+                        <label class="block font-semibold text-slate-700 mb-1">Jadwal Pengiriman</label>
+                        <input type="date" id="so-delivery-date" class="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 outline-none">
+                    </div>
+                </div>
+
+                <div class="border border-slate-200 rounded-xl p-3 bg-slate-50/50 space-y-2">
+                    <div class="flex items-center justify-between">
+                        <span class="font-bold text-slate-800 text-xs">Daftar Barang Pesanan Pelanggan:</span>
+                        <button type="button" onclick="addSoItemRow()" class="px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold rounded-lg transition border border-emerald-200 text-[11px] flex items-center gap-1">
+                            + Tambah Baris Produk
+                        </button>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left text-xs">
+                            <thead class="text-[10px] text-slate-400 uppercase font-semibold">
+                                <tr>
+                                    <th class="p-1.5">Produk SKU</th>
+                                    <th class="p-1.5 w-24">Jumlah</th>
+                                    <th class="p-1.5 w-32">Harga Jual (Rp)</th>
+                                    <th class="p-1.5 w-32 text-right">Subtotal</th>
+                                    <th class="p-1.5 w-10 text-center"></th>
+                                </tr>
+                            </thead>
+                            <tbody id="so-items-table-body" class="divide-y divide-slate-100"></tbody>
+                        </table>
+                    </div>
+                    <div class="flex justify-end pt-2 border-t border-slate-200">
+                        <span class="font-bold text-slate-700 mr-2">Estimasi Nilai SO:</span>
+                        <span class="font-extrabold text-emerald-700 font-mono text-sm" id="so-total-calc-display">Rp 0</span>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block font-semibold text-slate-700 mb-1">Catatan Tambahan</label>
+                    <textarea id="so-notes" rows="2" placeholder="Instruksi pengiriman armada truk..." class="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 outline-none"></textarea>
+                </div>
+
+                <div class="flex justify-end gap-2 pt-3 border-t border-slate-100">
+                    <button type="button" onclick="closeModal('modal-create-so')" class="px-4 py-2 rounded-xl bg-slate-100 text-slate-700 font-medium hover:bg-slate-200">Batal</button>
+                    <button type="submit" id="btn-submit-so" class="px-4 py-2 rounded-xl bg-emerald-600 text-white font-medium hover:bg-emerald-700 shadow-sm flex items-center gap-1.5">
+                        Simpan Sales Order (Draft)
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal 21: Detail Sales Order -->
+    <div id="modal-so-detail" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-2xl w-full p-6 relative max-h-[90vh] flex flex-col">
+            <div class="flex items-center justify-between pb-3 border-b border-slate-100 mb-3">
+                <div>
+                    <span class="text-[10px] font-bold uppercase tracking-wider text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded border border-emerald-200">Rincian Dokumen SO</span>
+                    <h3 class="text-base font-bold text-slate-900 mt-1" id="dtl-so-number">SO-XXXX</h3>
+                </div>
+                <button onclick="closeModal('modal-so-detail')" class="text-slate-400 hover:text-slate-700 text-xl font-bold">&times;</button>
+            </div>
+
+            <div class="overflow-y-auto space-y-3 flex-1 text-xs pr-1">
+                <div class="grid grid-cols-2 sm:grid-cols-3 gap-3 p-3 bg-slate-50 rounded-xl border border-slate-200">
+                    <div>
+                        <span class="text-slate-400 text-[10px] font-bold uppercase block">Nama Pelanggan</span>
+                        <span class="font-bold text-slate-900" id="dtl-so-customer">-</span>
+                    </div>
+                    <div>
+                        <span class="text-slate-400 text-[10px] font-bold uppercase block">Gudang Asal</span>
+                        <span class="font-bold text-slate-900" id="dtl-so-facility">-</span>
+                    </div>
+                    <div>
+                        <span class="text-slate-400 text-[10px] font-bold uppercase block">Status SO</span>
+                        <span id="dtl-so-status-badge">-</span>
+                    </div>
+                    <div>
+                        <span class="text-slate-400 text-[10px] font-bold uppercase block">Tanggal Pesan</span>
+                        <span class="font-bold text-slate-900" id="dtl-so-date">-</span>
+                    </div>
+                    <div>
+                        <span class="text-slate-400 text-[10px] font-bold uppercase block">Total Nilai SO</span>
+                        <span class="font-extrabold text-emerald-700 font-mono" id="dtl-so-total">-</span>
+                    </div>
+                    <div>
+                        <span class="text-slate-400 text-[10px] font-bold uppercase block">Target Pengiriman</span>
+                        <span class="font-bold text-slate-900" id="dtl-so-delivery">-</span>
+                    </div>
+                </div>
+
+                <div class="border border-slate-200 rounded-xl overflow-hidden bg-white">
+                    <div class="p-2.5 bg-slate-100 border-b border-slate-200 font-bold text-slate-800 text-[11px]">
+                        Rincian Item Barang:
+                    </div>
+                    <div class="max-h-52 overflow-y-auto">
+                        <table class="w-full text-left">
+                            <thead class="bg-slate-50 text-[10px] uppercase font-bold text-slate-500 border-b border-slate-200">
+                                <tr>
+                                    <th class="p-2.5">Produk</th>
+                                    <th class="p-2.5 text-right">Dipesan</th>
+                                    <th class="p-2.5 text-right">Harga Jual</th>
+                                    <th class="p-2.5 text-right">Subtotal</th>
+                                </tr>
+                            </thead>
+                            <tbody id="dtl-so-items-tbody" class="divide-y divide-slate-100 text-xs"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="p-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-600">
+                    <p><b>Alamat Kirim:</b> <span id="dtl-so-address">-</span></p>
+                    <p class="mt-1"><b>Catatan:</b> <span id="dtl-so-notes">-</span></p>
+                </div>
+            </div>
+
+            <div class="flex items-center justify-between pt-3 border-t border-slate-100 mt-3">
+                <button type="button" onclick="printCurrentSoDocument()" class="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 shadow-sm transition">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/></svg>
+                    Cetak Sales Order (A4)
+                </button>
+                <button type="button" onclick="closeModal('modal-so-detail')" class="px-4 py-2 rounded-xl bg-slate-100 text-slate-700 font-medium hover:bg-slate-200 text-xs">Tutup</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Konfirmasi 1-Klik Pembangkitan Draft PO dari Replenishment Trigger -->
+    <div id="modal-confirm-reorder-po" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-lg w-full p-6 relative flex flex-col">
+            <div class="flex items-center justify-between pb-3 border-b border-slate-100 mb-3">
+                <div>
+                    <span class="text-[10px] font-bold uppercase tracking-wider text-amber-700 bg-amber-50 px-2.5 py-0.5 rounded border border-amber-200">Pemicu Cerdas Replenishment</span>
+                    <h3 class="text-base font-bold text-slate-900 mt-1">Buat Draft Purchase Order (PO)</h3>
+                </div>
+                <button onclick="closeModal('modal-confirm-reorder-po')" class="text-slate-400 hover:text-slate-700 text-xl font-bold">&times;</button>
+            </div>
+
+            <form id="form-confirm-reorder-po" onsubmit="handleConfirmReorderPo(event)" class="space-y-3.5 text-xs">
+                <input type="hidden" id="reorder-product-id">
+
+                <div class="p-3 bg-amber-50/60 border border-amber-200 rounded-xl space-y-1">
+                    <p class="font-bold text-slate-800 text-sm" id="reorder-display-prod-name">-</p>
+                    <p class="text-slate-600">SKU: <span id="reorder-display-sku" class="font-mono font-bold text-slate-700">-</span> | Satuan: <span id="reorder-display-unit">-</span></p>
+                    <div class="flex items-center gap-3 pt-1 text-[11px]">
+                        <span>Stok Saat Ini: <b id="reorder-display-stock" class="text-rose-600 font-bold">0</b></span>
+                        <span>Batas Min: <b id="reorder-display-min">0</b></span>
+                        <span>Defisit: <b id="reorder-display-deficit" class="text-amber-700 font-bold">0</b></span>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                        <label class="block font-semibold text-slate-700 mb-1">Pemasok (Vendor) *</label>
+                        <select id="reorder-supplier-id" required class="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 outline-none">
+                            <option value="">Pilih Vendor...</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block font-semibold text-slate-700 mb-1">Gudang Tujuan *</label>
+                        <select id="reorder-facility-id" required class="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 outline-none">
+                            <option value="">Pilih Gudang...</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                        <label class="block font-semibold text-slate-700 mb-1">Kuantitas Pesan *</label>
+                        <input type="number" id="reorder-quantity-input" min="1" required oninput="updateReorderModalTotal()" class="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 outline-none font-bold text-blue-700">
+                    </div>
+                    <div>
+                        <label class="block font-semibold text-slate-700 mb-1">Harga Pokok (HPP) Rp</label>
+                        <input type="number" id="reorder-cost-input" min="0" step="100" oninput="updateReorderModalTotal()" class="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 outline-none">
+                    </div>
+                </div>
+
+                <div class="p-3 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-between">
+                    <span class="text-slate-600 font-medium">Estimasi Nilai PO:</span>
+                    <span id="reorder-display-total-amount" class="text-sm font-black text-slate-900">Rp 0</span>
+                </div>
+
+                <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+                    <button type="button" onclick="closeModal('modal-confirm-reorder-po')" class="px-4 py-2 rounded-xl bg-slate-100 text-slate-700 font-medium hover:bg-slate-200">Batal</button>
+                    <button type="submit" id="btn-submit-reorder-po" class="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold shadow-sm transition flex items-center gap-1.5">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                        Buat Draft PO Sekarang
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Script Frontend JS -->
+    <script src="js/barcode.js"></script>
+    <script src="js/documents.js"></script>
+    <script src="js/main.js"></script>
+    <script src="js/dashboard.js"></script>
+</body>
+</html>
