@@ -99,9 +99,10 @@ exports.getUserById = async (req, res) => {
 // 3. Tambah Pengguna Baru (ADMIN Only)
 exports.createUser = async (req, res) => {
     try {
-        const { username, password, full_name, role, facility_id } = req.body;
+        const { username, password, full_name, role, facility_id, email } = req.body;
+        const resolvedFullName = (full_name || email || username || '').trim();
 
-        if (!username || !password || !full_name) {
+        if (!username || !password || !resolvedFullName) {
             return res.status(400).json({
                 status: 'Error',
                 message: 'Username, password, dan nama lengkap wajib diisi.'
@@ -150,16 +151,16 @@ exports.createUser = async (req, res) => {
         const [result] = await db.query(
             `INSERT INTO users (username, password_hash, full_name, role, facility_id, is_active)
              VALUES (?, ?, ?, ?, ?, 1)`,
-            [cleanUsername, passwordHash, full_name.trim(), userRole, targetFacilityId]
+            [cleanUsername, passwordHash, resolvedFullName, userRole, targetFacilityId]
         );
 
         return res.status(201).json({
             status: 'Success',
-            message: `Pengguna '${full_name}' (@${cleanUsername}) berhasil didaftarkan sebagai ${userRole}!`,
+            message: `Pengguna '${resolvedFullName}' (@${cleanUsername}) berhasil didaftarkan sebagai ${userRole}!`,
             data: {
                 user_id: result.insertId,
                 username: cleanUsername,
-                full_name: full_name.trim(),
+                full_name: resolvedFullName,
                 role: userRole,
                 facility_id: targetFacilityId
             }

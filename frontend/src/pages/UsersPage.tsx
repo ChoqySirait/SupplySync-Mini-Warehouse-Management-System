@@ -35,6 +35,7 @@ export const UsersPage: React.FC = () => {
 
   // Form State
   const [username, setUsername] = useState('');
+  const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [role, setRole] = useState<UserRole>('STAFF');
@@ -60,6 +61,7 @@ export const UsersPage: React.FC = () => {
 
   const openAdd = () => {
     setUsername('');
+    setFullName('');
     setEmail('');
     setPassword('');
     setRole('STAFF');
@@ -69,6 +71,7 @@ export const UsersPage: React.FC = () => {
 
   const openEdit = (u: User) => {
     setSelectedUser(u);
+    setFullName(u.full_name || '');
     setRole(u.role);
     setFacilityId(u.facility_id || 1);
     setShowEditModal(true);
@@ -82,8 +85,8 @@ export const UsersPage: React.FC = () => {
 
   const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!username || !email || !password) {
-      error('Validasi Gagal', 'Harap isi seluruh bidang pengguna.');
+    if (!username || !password || !fullName) {
+      error('Validasi Gagal', 'Harap isi nama pengguna, nama lengkap, dan kata sandi.');
       return;
     }
 
@@ -91,6 +94,7 @@ export const UsersPage: React.FC = () => {
     try {
       await api.createUser({
         username,
+        full_name: fullName,
         email,
         password,
         role,
@@ -285,23 +289,31 @@ export const UsersPage: React.FC = () => {
               required
             />
             <Input
+              label="Nama Lengkap"
+              placeholder="Budi Santoso"
+              value={fullName}
+              onChange={(e) => setFullName(e.target.value)}
+              required
+            />
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Input
               label="Alamat Email"
               type="email"
               placeholder="budi@supplysync.local"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
+            />
+            <Input
+              label="Kata Sandi Awal"
+              type="password"
+              placeholder="Minimal 6 karakter"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
               required
             />
           </div>
-
-          <Input
-            label="Kata Sandi Awal"
-            type="password"
-            placeholder="Minimal 6 karakter"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-          />
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-1.5 text-left">
