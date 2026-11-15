@@ -101,7 +101,7 @@ exports.downloadBackupFile = async (req, res) => {
         if (!fs.existsSync(filePath)) {
             return res.status(404).json({
                 status: 'Error',
-                message: 'Berkas cadangan tidak ditemukan di server.'
+                message: `Berkas cadangan '${safeFilename}' tidak ditemukan di server.`
             });
         }
 
@@ -111,6 +111,38 @@ exports.downloadBackupFile = async (req, res) => {
         return res.status(500).json({
             status: 'Error',
             message: `Gagal mengunduh berkas cadangan: ${error.message}`
+        });
+    }
+};
+
+/**
+ * 5. Pulihkan Database dari Berkas Cadangan
+ * POST /api/system/restore
+ */
+exports.restoreBackup = async (req, res) => {
+    try {
+        const { filename } = req.body;
+
+        if (!filename) {
+            return res.status(400).json({
+                status: 'Error',
+                message: 'Nama berkas cadangan wajib disertakan.'
+            });
+        }
+
+        const safeFilename = path.basename(filename);
+        const restoreResult = await backupService.restoreDatabaseFromBackup(safeFilename);
+
+        return res.json({
+            status: 'Success',
+            message: `Basis data berhasil dipulihkan dari '${safeFilename}'.`,
+            data: restoreResult
+        });
+    } catch (error) {
+        console.error('❌ Error restoreBackup:', error.message);
+        return res.status(500).json({
+            status: 'Error',
+            message: `Gagal memulihkan database: ${error.message}`
         });
     }
 };

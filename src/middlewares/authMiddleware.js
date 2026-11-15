@@ -2,18 +2,23 @@ const { verifyToken } = require('../utils/security');
 const db = require('../config/database');
 
 /**
- * Middleware Autentikasi Wajib (JWT Bearer Token)
+ * Middleware Autentikasi Wajib (JWT Bearer Token / Cookie)
  */
 exports.authenticateToken = (req, res, next) => {
     const authHeader = req.headers['authorization'];
-    const token = authHeader && authHeader.startsWith('Bearer ') 
+    let token = authHeader && authHeader.startsWith('Bearer ') 
         ? authHeader.slice(7).trim() 
         : req.query.token;
+
+    // Dukungan Cookie HttpOnly jika tersedia
+    if (!token && req.cookies && req.cookies.supplysync_token) {
+        token = req.cookies.supplysync_token;
+    }
 
     if (!token) {
         return res.status(401).json({
             status: 'Error',
-            message: 'Akses ditolak: Token autentikasi tidak disertakan.'
+            message: 'Akses ditolak: Token autentikasi tidak disertakan atau sesi tidak valid.'
         });
     }
 
@@ -24,20 +29,23 @@ exports.authenticateToken = (req, res, next) => {
     } catch (error) {
         return res.status(401).json({
             status: 'Error',
-            message: error.message
+            message: error.message || 'Sesi otorisasi tidak valid.'
         });
     }
 };
 
 /**
  * Middleware Autentikasi Opsional
- * Membaca identitas pengguna jika token disertakan tanpa menolak request jika tidak ada token.
  */
 exports.optionalAuth = (req, res, next) => {
     const authHeader = req.headers['authorization'];
-    const token = authHeader && authHeader.startsWith('Bearer ') 
+    let token = authHeader && authHeader.startsWith('Bearer ') 
         ? authHeader.slice(7).trim() 
         : req.query.token;
+
+    if (!token && req.cookies && req.cookies.supplysync_token) {
+        token = req.cookies.supplysync_token;
+    }
 
     if (token) {
         try {
@@ -61,7 +69,7 @@ exports.authorizeRole = (...roles) => {
         if (!req.user) {
             return res.status(401).json({
                 status: 'Error',
-                message: 'Autentikasi diperlukan sebelum memeriksa hak akses.'
+                message: 'Autentikasi diperlukan sebelum memeriksa hak akses pengguna.'
             });
         }
 
@@ -80,7 +88,7 @@ exports.authorizeRole = (...roles) => {
 };
 
 /**
- * Middleware Scoping Fasilitas Gudang
+ * Middleware Scoping Fasilitas Gudang (Multi-Facility Scoping)
  * Memastikan operator role STAFF hanya dapat memanipulasi data fasilitas gudang tempat ia ditugaskan.
  * ADMIN dan MANAGER memiliki hak akses multi-fasilitas (lintas gudang).
  */
@@ -94,13 +102,15 @@ exports.requireFacilityScope = (options = {}) => {
         }
 
         const userRole = (req.user.role || '').toUpperCase();
+        const userFacilityId = req.user.facility_id || 1;
+
         // ADMIN dan MANAGER bebas mengelola seluruh fasilitas (Cross-Facility Clearance)
         if (userRole === 'ADMIN' || userRole === 'MANAGER') {
             return next();
         }
 
-        const userFacilityId = req.user.facility_id || 1;
-        const targetFacilityId = req.body?.facility_id || req.query?.facility_id;
+        // Untuk STAFF:
+        const targetFacilityId = req.body?.facility_id || req.query?.facility_id || req.params?.facility_id;
 
         if (targetFacilityId && parseInt(targetFacilityId, 10) !== parseInt(userFacilityId, 10)) {
             return res.status(403).json({
@@ -109,7 +119,12 @@ exports.requireFacilityScope = (options = {}) => {
             });
         }
 
-        // Jika operasi menyertakan location_id, verifikasi bahwa lokasi tersebut berada dalam fasilitas pengguna
+        // Jika request body tidak menyertakan facility_id, pasang otomatis facility_id milik staf
+        if (req.body && !req.body.facility_id) {
+            req.body.facility_id = userFacilityId;
+        }
+
+        // Jika operasi menyertakan location_id, verifikasi bahwa lokasi tersebut berada dalam fasilitas staf
         const locationId = req.body?.location_id || req.query?.location_id;
         if (locationId) {
             try {
@@ -127,7 +142,6 @@ exports.requireFacilityScope = (options = {}) => {
                     }
                 }
             } catch (err) {
-                // Jika error koneksi pada test terisolasi tanpa MySQL nyata
                 console.warn('⚠️ Catatan requireFacilityScope:', err.message);
             }
         }

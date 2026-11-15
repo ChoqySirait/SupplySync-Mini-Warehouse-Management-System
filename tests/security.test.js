@@ -1,6 +1,6 @@
 const { test, describe } = require('node:test');
 const assert = require('node:assert/strict');
-const { hashPassword, verifyPassword, generateToken, verifyToken } = require('../src/utils/security');
+const { hashPassword, verifyPassword, generateToken, verifyToken, revokeToken } = require('../src/utils/security');
 
 describe('Security Utilities: Password Hashing & JWT', () => {
     test('1. Hash password menghasilkan format scrypt$salt$hash yang aman', () => {
@@ -18,11 +18,19 @@ describe('Security Utilities: Password Hashing & JWT', () => {
         assert.strictEqual(verifyPassword('WrongPassword123', hashed), false);
     });
 
-    test('2. Verifikasi kata sandi bawaan akun demo (admin123, manager123, staff123)', () => {
-        assert.strictEqual(verifyPassword('admin123', 'any-stored-hash'), true);
-        assert.strictEqual(verifyPassword('manager123', 'any-stored-hash'), true);
-        assert.strictEqual(verifyPassword('staff123', 'any-stored-hash'), true);
-        assert.strictEqual(verifyPassword('incorrect', 'any-stored-hash'), false);
+    test('2. Penanganan format hash tidak valid atau serangan pemalsuan tanpa crash', () => {
+        // Hash palsu atau rusak harus mengembalikan false tanpa melempar RangeError / crash
+        assert.strictEqual(verifyPassword('admin123', 'any-stored-hash'), false);
+        assert.strictEqual(verifyPassword('admin123', 'scrypt$short$hash'), false);
+        assert.strictEqual(verifyPassword('admin123', 'scrypt$a1b2c3d4e5f60718$3f5a2b1c8d9e0f'), false); // Too short hash
+        assert.strictEqual(verifyPassword('', 'scrypt$00$00'), false);
+        assert.strictEqual(verifyPassword(null, null), false);
+        assert.strictEqual(verifyPassword('admin123', undefined), false);
+
+        // Valid scrypt hash harus berhasil diverifikasi
+        const validHash = hashPassword('admin123');
+        assert.strictEqual(verifyPassword('admin123', validHash), true);
+        assert.strictEqual(verifyPassword('admin_wrong', validHash), false);
     });
 
     test('3. Pembuatan dan verifikasi token JWT valid', () => {
@@ -65,5 +73,15 @@ describe('Security Utilities: Password Hashing & JWT', () => {
         assert.throws(() => {
             verifyToken(expiredToken);
         }, /kedaluwarsa/i);
+    });
+
+    test('6. Token JWT yang di-revoke (Logout) ditolak dari verifikasi', () => {
+        const token = generateToken({ user_id: 1, username: 'admin' }, 3600);
+        assert.ok(verifyToken(token));
+
+        revokeToken(token);
+        assert.throws(() => {
+            verifyToken(token);
+        }, /logout|kedaluwarsa/i);
     });
 });

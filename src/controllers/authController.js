@@ -1,47 +1,10 @@
 const db = require('../config/database');
-const { verifyPassword, generateToken, hashPassword } = require('../utils/security');
+const { verifyPassword, generateToken, hashPassword, revokeToken } = require('../utils/security');
 
-// Akun Demo Cadangan jika database belum terisi
-const DEMO_USERS = [
-    { 
-        user_id: 1, 
-        username: 'admin', 
-        role: 'ADMIN', 
-        full_name: 'Choqy Pananda', 
-        facility_id: 1, 
-        facility_code: 'WH-JKT-01', 
-        facility_name: 'Gudang Pusat Cakung (Semua Cabang)' 
-    },
-    { 
-        user_id: 2, 
-        username: 'manager', 
-        role: 'MANAGER', 
-        full_name: 'Siti Rahmawati', 
-        facility_id: 1, 
-        facility_code: 'WH-JKT-01', 
-        facility_name: 'Gudang Pusat Cakung (Regional Hub)' 
-    },
-    { 
-        user_id: 3, 
-        username: 'staff', 
-        role: 'STAFF', 
-        full_name: 'Budi Santoso', 
-        facility_id: 1, 
-        facility_code: 'WH-JKT-01', 
-        facility_name: 'Gudang Pusat Cakung' 
-    },
-    { 
-        user_id: 4, 
-        username: 'staff_sby', 
-        role: 'STAFF', 
-        full_name: 'Surya Pratama', 
-        facility_id: 2, 
-        facility_code: 'WH-SBY-01', 
-        facility_name: 'Cold Storage Rungkut' 
-    }
-];
-
-// 1. Login User & Terbitkan JWT
+/**
+ * 1. Login Pengguna & Penerbitan JWT
+ * POST /api/auth/login
+ */
 exports.login = async (req, res) => {
     try {
         const { username, password } = req.body;
@@ -55,49 +18,41 @@ exports.login = async (req, res) => {
 
         const cleanUsername = username.trim().toLowerCase();
 
-        // 1. Cek ke database MySQL
-        let user = null;
-        try {
-            const [rows] = await db.query(
-                `SELECT u.user_id, u.username, u.password_hash, u.full_name, u.role, u.is_active,
-                        COALESCE(u.facility_id, 1) as facility_id,
-                        f.facility_code, f.facility_name
-                 FROM users u
-                 LEFT JOIN warehouse_facilities f ON u.facility_id = f.facility_id
-                 WHERE LOWER(u.username) = ? AND u.is_active = 1`,
-                [cleanUsername]
-            );
-            if (rows && rows.length > 0) {
-                user = rows[0];
-            }
-        } catch (dbErr) {
-            console.warn('⚠️ Gagal kueri users ke MySQL, mencoba fallback demo akun:', dbErr.message);
-        }
+        // 1. Kueri data pengguna dari MySQL
+        const [rows] = await db.query(
+            `SELECT u.user_id, u.username, u.password_hash, u.full_name, u.role, u.is_active,
+                    COALESCE(u.facility_id, 1) as facility_id,
+                    f.facility_code, f.facility_name
+             FROM users u
+             LEFT JOIN warehouse_facilities f ON u.facility_id = f.facility_id
+             WHERE LOWER(u.username) = ?`,
+            [cleanUsername]
+        );
 
-        // 2. Fallback ke DEMO_USERS jika DB kosong/belum terhubung
-        if (!user) {
-            const foundDemo = DEMO_USERS.find(u => u.username === cleanUsername);
-            if (foundDemo && verifyPassword(password, foundDemo.username + '123')) {
-                user = { ...foundDemo, password_hash: '' };
-            }
-        }
-
-        if (!user) {
+        if (!rows || rows.length === 0) {
             return res.status(401).json({
                 status: 'Error',
                 message: 'Kredensial tidak valid: Username atau password salah.'
             });
         }
 
-        // 3. Verifikasi kata sandi jika ada hash di DB
-        if (user.password_hash) {
-            const isMatch = verifyPassword(password, user.password_hash);
-            if (!isMatch) {
-                return res.status(401).json({
-                    status: 'Error',
-                    message: 'Kredensial tidak valid: Username atau password salah.'
-                });
-            }
+        const user = rows[0];
+
+        // 2. Periksa status aktif akun
+        if (!user.is_active) {
+            return res.status(403).json({
+                status: 'Error',
+                message: 'Akun Anda berstatus non-aktif. Silakan hubungi Administrator sistem.'
+            });
+        }
+
+        // 3. Verifikasi kata sandi secara aman dengan scrypt NIST
+        const isMatch = verifyPassword(password, user.password_hash);
+        if (!isMatch) {
+            return res.status(401).json({
+                status: 'Error',
+                message: 'Kredensial tidak valid: Username atau password salah.'
+            });
         }
 
         // 4. Buat payload JWT & token
@@ -111,62 +66,175 @@ exports.login = async (req, res) => {
             facility_name: user.facility_name || 'Gudang Pusat Cakung'
         };
 
-        const token = generateToken(tokenPayload, 86400); // 24 jam
+        const token = generateToken(tokenPayload, 86400); // Masa berlaku 24 jam
 
-        res.json({
+        return res.json({
             status: 'Success',
-            message: `Selamat datang kembali, ${user.full_name}!`,
+            message: `Autentikasi berhasil. Selamat datang kembali, ${user.full_name}!`,
             token,
             user: tokenPayload
         });
 
     } catch (error) {
         console.error('❌ Error pada login authController:', error.message);
-        res.status(500).json({ status: 'Error', message: error.message });
+        return res.status(500).json({ status: 'Error', message: 'Terjadi kesalahan sistem saat memproses login.' });
     }
 };
 
-// 2. Ambil Profil Pengguna Aktif (Me)
+/**
+ * 2. Ambil Profil Pengguna Aktif (Me)
+ * GET /api/auth/me
+ */
 exports.getMe = async (req, res) => {
     try {
         if (!req.user) {
-            return res.status(401).json({ status: 'Error', message: 'Tidak terautentikasi.' });
+            return res.status(401).json({ status: 'Error', message: 'Sesi tidak terautentikasi.' });
         }
 
-        res.json({
+        const [rows] = await db.query(
+            `SELECT u.user_id, u.username, u.full_name, u.role, u.is_active, u.created_at,
+                    COALESCE(u.facility_id, 1) as facility_id,
+                    f.facility_code, f.facility_name, f.city
+             FROM users u
+             LEFT JOIN warehouse_facilities f ON u.facility_id = f.facility_id
+             WHERE u.user_id = ?`,
+            [req.user.user_id]
+        );
+
+        if (!rows || rows.length === 0) {
+            return res.status(404).json({ status: 'Error', message: 'Data pengguna tidak ditemukan.' });
+        }
+
+        return res.json({
             status: 'Success',
-            data: req.user
+            data: rows[0]
         });
     } catch (error) {
-        res.status(500).json({ status: 'Error', message: error.message });
+        return res.status(500).json({ status: 'Error', message: error.message });
     }
 };
 
-// 3. Ambil Daftar Seluruh Pengguna (Untuk Admin / Operator Switcher)
-exports.getAllUsers = async (req, res) => {
+/**
+ * 3. Logout Pengguna (Token Revocation)
+ * POST /api/auth/logout
+ */
+exports.logout = async (req, res) => {
     try {
-        let users = [];
-        try {
-            const [rows] = await db.query(
-                `SELECT u.user_id, u.username, u.full_name, u.role, u.is_active, u.created_at,
-                        COALESCE(u.facility_id, 1) as facility_id,
-                        f.facility_code, f.facility_name
-                 FROM users u
-                 LEFT JOIN warehouse_facilities f ON u.facility_id = f.facility_id
-                 WHERE u.is_active = 1 
-                 ORDER BY u.role ASC, u.full_name ASC`
-            );
-            users = rows;
-        } catch {
-            users = DEMO_USERS;
+        const authHeader = req.headers['authorization'];
+        const token = authHeader && authHeader.startsWith('Bearer ') 
+            ? authHeader.slice(7).trim() 
+            : null;
+
+        if (token) {
+            revokeToken(token);
         }
 
-        res.json({
+        return res.json({
             status: 'Success',
-            count: users.length,
-            data: users
+            message: 'Logout berhasil. Sesi Anda telah diakhiri dengan aman.'
         });
     } catch (error) {
-        res.status(500).json({ status: 'Error', message: error.message });
+        return res.status(500).json({ status: 'Error', message: error.message });
+    }
+};
+
+/**
+ * 4. Ubah Kata Sandi Sendiri
+ * POST /api/auth/change-password
+ */
+exports.changePassword = async (req, res) => {
+    try {
+        const { current_password, new_password } = req.body;
+
+        if (!current_password || !new_password) {
+            return res.status(400).json({
+                status: 'Error',
+                message: 'Kata sandi saat ini dan kata sandi baru wajib diisi.'
+            });
+        }
+
+        if (new_password.length < 6) {
+            return res.status(400).json({
+                status: 'Error',
+                message: 'Kata sandi baru minimal 6 karakter.'
+            });
+        }
+
+        const [rows] = await db.query(
+            'SELECT user_id, password_hash FROM users WHERE user_id = ?',
+            [req.user.user_id]
+        );
+
+        if (!rows || rows.length === 0) {
+            return res.status(404).json({ status: 'Error', message: 'Pengguna tidak ditemukan.' });
+        }
+
+        const isMatch = verifyPassword(current_password, rows[0].password_hash);
+        if (!isMatch) {
+            return res.status(400).json({
+                status: 'Error',
+                message: 'Kata sandi saat ini tidak sesuai.'
+            });
+        }
+
+        const newHash = hashPassword(new_password);
+        await db.query(
+            'UPDATE users SET password_hash = ? WHERE user_id = ?',
+            [newHash, req.user.user_id]
+        );
+
+        return res.json({
+            status: 'Success',
+            message: 'Kata sandi Anda berhasil diperbarui.'
+        });
+    } catch (error) {
+        return res.status(500).json({ status: 'Error', message: error.message });
+    }
+};
+
+/**
+ * 5. Inisialisasi Administrator Pertama (Hanya jika belum ada user di database)
+ * POST /api/auth/setup-admin
+ */
+exports.setupInitialAdmin = async (req, res) => {
+    try {
+        const [[countRow]] = await db.query('SELECT COUNT(*) AS total_users FROM users');
+        if (countRow.total_users > 0) {
+            return res.status(403).json({
+                status: 'Error',
+                message: 'Inisialisasi ditolak: Administrator sistem sudah pernah dikonfigurasi.'
+            });
+        }
+
+        const { username, password, full_name } = req.body;
+        if (!username || !password || !full_name) {
+            return res.status(400).json({
+                status: 'Error',
+                message: 'Username, password, dan nama lengkap wajib diisi untuk inisialisasi awal.'
+            });
+        }
+
+        if (password.length < 8) {
+            return res.status(400).json({
+                status: 'Error',
+                message: 'Kata sandi administrator awal minimal 8 karakter.'
+            });
+        }
+
+        const cleanUsername = username.trim().toLowerCase();
+        const hashedPassword = hashPassword(password);
+
+        await db.query(
+            `INSERT INTO users (username, password_hash, full_name, role, facility_id, is_active)
+             VALUES (?, ?, ?, 'ADMIN', 1, 1)`,
+            [cleanUsername, hashedPassword, full_name.trim()]
+        );
+
+        return res.status(201).json({
+            status: 'Success',
+            message: `Administrator awal '${cleanUsername}' berhasil dibuat. Silakan login ke aplikasi.`
+        });
+    } catch (error) {
+        return res.status(500).json({ status: 'Error', message: error.message });
     }
 };

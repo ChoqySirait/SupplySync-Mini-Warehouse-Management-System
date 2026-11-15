@@ -1,7 +1,7 @@
 /**
  * SupplySync WMS - Core Inventory, FEFO Engine, & Picking Route Service
  * Mengelola alokasi First-Expired, First-Out (FEFO), concurrency locking,
- * batch traceability, dan instruksi lokasi rak gudang (Bin Picking Route).
+ * batch traceability, facility scoping, dan rute lokasi rak gudang.
  */
 
 /**
@@ -43,6 +43,7 @@ function allocateFefoBatches(batches, requiredQty) {
             expired_date: batch.expired_date,
             deducted: deduct,
             remaining: batch.quantity - deduct,
+            facility_id: batch.facility_id || 1,
             location_id: batch.location_id || null,
             location_code: batch.location_code || 'A-01-01',
             zone_name: batch.zone_name || 'Area Umum',
@@ -77,7 +78,7 @@ function generateReferenceNumber(type) {
 /**
  * 1. Proses Penerimaan Barang Masuk (Stock Inbound)
  */
-async function processStockIn(connection, { product_id, quantity, expired_date, supplier_id, location_id, notes, user_id, batch_code }) {
+async function processStockIn(connection, { product_id, quantity, expired_date, supplier_id, location_id, facility_id, notes, user_id, batch_code }) {
     // 1. Kunci produk dan periksa status aktif
     const [products] = await connection.query(
         `SELECT product_id, product_name, is_active FROM products WHERE product_id = ? FOR UPDATE`,
@@ -92,24 +93,36 @@ async function processStockIn(connection, { product_id, quantity, expired_date, 
         throw new Error(`Produk '${products[0].product_name}' (${product_id}) berstatus non-aktif.`);
     }
 
+    // Tentukan facility_id: dari payload, atau diturunkan dari location_id jika ada
+    let targetFacilityId = facility_id ? parseInt(facility_id, 10) : 1;
+    if (location_id) {
+        const [locRows] = await connection.query(
+            'SELECT facility_id, location_code FROM warehouse_locations WHERE location_id = ?',
+            [location_id]
+        );
+        if (locRows && locRows.length > 0) {
+            targetFacilityId = locRows[0].facility_id;
+        }
+    }
+
     const today = new Date().toISOString().split('T')[0];
     const generatedBatchCode = batch_code || `BTC-${product_id}-${Date.now().toString().slice(-6)}`;
     const refNo = generateReferenceNumber('IN');
 
-    // 2. Simpan batch baru ke inventory_batches lengkap dengan lokasi rak
+    // 2. Simpan batch baru ke inventory_batches lengkap dengan facility_id & lokasi rak
     const [batchResult] = await connection.query(
-        `INSERT INTO inventory_batches (batch_code, product_id, supplier_id, location_id, initial_quantity, quantity, expired_date, received_date, notes) 
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [generatedBatchCode, product_id, supplier_id || null, location_id || null, quantity, quantity, expired_date, today, notes || null]
+        `INSERT INTO inventory_batches (batch_code, product_id, supplier_id, location_id, initial_quantity, quantity, expired_date, received_date, notes, facility_id) 
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [generatedBatchCode, product_id, supplier_id || null, location_id || null, quantity, quantity, expired_date, today, notes || null, targetFacilityId]
     );
 
     const newBatchId = batchResult.insertId;
 
-    // 3. Catat transaksi utama ke stock_transactions
+    // 3. Catat transaksi utama ke stock_transactions lengkap dengan facility_id
     const [trxResult] = await connection.query(
-        `INSERT INTO stock_transactions (reference_no, product_id, user_id, transaction_type, quantity, notes) 
-         VALUES (?, ?, ?, 'IN', ?, ?)`,
-        [refNo, product_id, user_id || 1, quantity, notes || 'Penerimaan batch barang masuk']
+        `INSERT INTO stock_transactions (reference_no, product_id, user_id, transaction_type, quantity, notes, facility_id) 
+         VALUES (?, ?, ?, 'IN', ?, ?, ?)`,
+        [refNo, product_id, user_id || 1, quantity, notes || 'Penerimaan batch barang masuk', targetFacilityId]
     );
 
     const transactionId = trxResult.insertId;
@@ -126,6 +139,7 @@ async function processStockIn(connection, { product_id, quantity, expired_date, 
         batch_id: newBatchId,
         batch_code: generatedBatchCode,
         product_name: products[0].product_name,
+        facility_id: targetFacilityId,
         quantity,
         expired_date,
         location_id: location_id || null
@@ -135,7 +149,7 @@ async function processStockIn(connection, { product_id, quantity, expired_date, 
 /**
  * 2. Proses Pengeluaran Barang Otomatis FEFO & Pembuatan Picking Slip (Stock Outflow)
  */
-async function processStockOutFefo(connection, { product_id, quantity, user_id, notes, allow_expired = false }) {
+async function processStockOutFefo(connection, { product_id, quantity, facility_id, user_id, notes, allow_expired = false }) {
     // 1. Kunci baris master produk untuk mencegah race condition / deadlocks
     const [products] = await connection.query(
         `SELECT product_id, product_name, is_active FROM products WHERE product_id = ? FOR UPDATE`,
@@ -156,6 +170,7 @@ async function processStockOutFefo(connection, { product_id, quantity, user_id, 
             b.batch_id, 
             b.batch_code, 
             b.product_id, 
+            b.facility_id,
             b.quantity, 
             b.expired_date, 
             b.received_date,
@@ -172,6 +187,11 @@ async function processStockOutFefo(connection, { product_id, quantity, user_id, 
     `;
     const params = [product_id];
 
+    if (facility_id) {
+        query += ` AND b.facility_id = ?`;
+        params.push(facility_id);
+    }
+
     if (!allow_expired) {
         query += ` AND b.expired_date >= CURDATE()`;
     }
@@ -186,19 +206,21 @@ async function processStockOutFefo(connection, { product_id, quantity, user_id, 
     if (totalAvailable < quantity) {
         let extraInfo = '';
         if (!allow_expired) {
-            const [[expiredCount]] = await connection.query(
-                `SELECT COALESCE(SUM(quantity), 0) AS expired_stock 
-                 FROM inventory_batches 
-                 WHERE product_id = ? AND quantity > 0 AND expired_date < CURDATE()`,
-                [product_id]
-            );
+            let expQuery = `SELECT COALESCE(SUM(quantity), 0) AS expired_stock FROM inventory_batches WHERE product_id = ? AND quantity > 0 AND expired_date < CURDATE()`;
+            const expParams = [product_id];
+            if (facility_id) {
+                expQuery += ` AND facility_id = ?`;
+                expParams.push(facility_id);
+            }
+            const [[expiredCount]] = await connection.query(expQuery, expParams);
             if (expiredCount && expiredCount.expired_stock > 0) {
                 extraInfo = ` (${expiredCount.expired_stock} unit kedaluwarsa dan tidak dialokasikan untuk penjualan. Gunakan modul Disposal).`;
             }
         }
 
+        const facilityInfo = facility_id ? ` pada Fasilitas ID ${facility_id}` : '';
         throw new Error(
-            `Stok tidak mencukupi untuk '${products[0].product_name}'. Stok siap pakai: ${totalAvailable}, diminta: ${quantity}.${extraInfo}`
+            `Stok tidak mencukupi untuk '${products[0].product_name}'${facilityInfo}. Stok siap pakai: ${totalAvailable}, diminta: ${quantity}.${extraInfo}`
         );
     }
 
@@ -207,10 +229,12 @@ async function processStockOutFefo(connection, { product_id, quantity, user_id, 
 
     // 5. Catat transaksi utama
     const refNo = generateReferenceNumber('OUT');
+    const targetFacility = facility_id || (allocations.length > 0 ? allocations[0].facility_id : 1);
+
     const [trxResult] = await connection.query(
-        `INSERT INTO stock_transactions (reference_no, product_id, user_id, transaction_type, quantity, notes) 
-         VALUES (?, ?, ?, 'OUT', ?, ?)`,
-        [refNo, product_id, user_id || 1, quantity, notes || 'Pengeluaran barang alokasi FEFO']
+        `INSERT INTO stock_transactions (reference_no, product_id, user_id, transaction_type, quantity, notes, facility_id) 
+         VALUES (?, ?, ?, 'OUT', ?, ?, ?)`,
+        [refNo, product_id, user_id || 1, quantity, notes || 'Pengeluaran barang alokasi FEFO', targetFacility]
     );
 
     const transactionId = trxResult.insertId;
@@ -241,6 +265,7 @@ async function processStockOutFefo(connection, { product_id, quantity, user_id, 
         reference_no: refNo,
         product_name: products[0].product_name,
         total_deducted: quantity,
+        facility_id: targetFacility,
         batches_affected: allocations,
         picking_instructions: pickingInstructions
     };
@@ -249,7 +274,7 @@ async function processStockOutFefo(connection, { product_id, quantity, user_id, 
 /**
  * 3. Modul Pembuangan Barang Afkir/Kedaluwarsa (Stock Disposal)
  */
-async function processStockDisposal(connection, { product_id, quantity, reason, user_id }) {
+async function processStockDisposal(connection, { product_id, quantity, facility_id, reason, user_id }) {
     const [products] = await connection.query(
         `SELECT product_id, product_name, is_active FROM products WHERE product_id = ? FOR UPDATE`,
         [product_id]
@@ -259,17 +284,24 @@ async function processStockDisposal(connection, { product_id, quantity, reason, 
         throw new Error(`Produk dengan SKU '${product_id}' tidak ditemukan di database.`);
     }
 
-    const [batches] = await connection.query(
-        `SELECT 
-            b.batch_id, b.batch_code, b.product_id, b.quantity, b.expired_date, b.received_date,
+    let query = `
+        SELECT 
+            b.batch_id, b.batch_code, b.product_id, b.facility_id, b.quantity, b.expired_date, b.received_date,
             b.location_id, COALESCE(l.location_code, 'A-01-01') AS location_code, COALESCE(l.zone_name, 'Area Umum') AS zone_name
-         FROM inventory_batches b
-         LEFT JOIN warehouse_locations l ON b.location_id = l.location_id
-         WHERE b.product_id = ? AND b.quantity > 0 
-         ORDER BY b.expired_date ASC, b.received_date ASC, b.batch_id ASC 
-         FOR UPDATE`,
-        [product_id]
-    );
+        FROM inventory_batches b
+        LEFT JOIN warehouse_locations l ON b.location_id = l.location_id
+        WHERE b.product_id = ? AND b.quantity > 0 
+    `;
+    const params = [product_id];
+
+    if (facility_id) {
+        query += ` AND b.facility_id = ?`;
+        params.push(facility_id);
+    }
+
+    query += ` ORDER BY b.expired_date ASC, b.received_date ASC, b.batch_id ASC FOR UPDATE`;
+
+    const [batches] = await connection.query(query, params);
 
     const totalAvailable = batches.reduce((sum, b) => sum + b.quantity, 0);
     if (totalAvailable < quantity) {
@@ -279,12 +311,13 @@ async function processStockDisposal(connection, { product_id, quantity, reason, 
     }
 
     const { allocations } = allocateFefoBatches(batches, quantity);
+    const targetFacility = facility_id || (allocations.length > 0 ? allocations[0].facility_id : 1);
 
     const refNo = generateReferenceNumber('DISP');
     const [trxResult] = await connection.query(
-        `INSERT INTO stock_transactions (reference_no, product_id, user_id, transaction_type, quantity, notes) 
-         VALUES (?, ?, ?, 'DISPOSAL', ?, ?)`,
-        [refNo, product_id, user_id || 1, quantity, `[DISPOSAL/AFKIR] ${reason}`]
+        `INSERT INTO stock_transactions (reference_no, product_id, user_id, transaction_type, quantity, notes, facility_id) 
+         VALUES (?, ?, ?, 'DISPOSAL', ?, ?, ?)`,
+        [refNo, product_id, user_id || 1, quantity, `[DISPOSAL/AFKIR] ${reason}`, targetFacility]
     );
 
     const transactionId = trxResult.insertId;
@@ -306,15 +339,16 @@ async function processStockDisposal(connection, { product_id, quantity, reason, 
         reference_no: refNo,
         product_name: products[0].product_name,
         quantity,
+        facility_id: targetFacility,
         reason,
         batches_affected: allocations
     };
 }
 
 /**
- * 4. Modul Rekonsiliasi Stok Opname (Physical vs System Stock)
+ * 4. Modul Rekonsiliasi Stok Opname (Physical vs System Stock per Fasilitas)
  */
-async function processStockOpname(connection, { product_id, physical_stock, reason, user_id }) {
+async function processStockOpname(connection, { product_id, physical_stock, facility_id, reason, user_id }) {
     const [products] = await connection.query(
         `SELECT product_id, product_name, is_active FROM products WHERE product_id = ? FOR UPDATE`,
         [product_id]
@@ -324,11 +358,14 @@ async function processStockOpname(connection, { product_id, physical_stock, reas
         throw new Error(`Produk dengan SKU '${product_id}' tidak ditemukan di database.`);
     }
 
+    const targetFacility = facility_id ? parseInt(facility_id, 10) : 1;
+
+    // Hitung stok sistem spesifik untuk fasilitas yang diperiksa
     const [[sysStockRow]] = await connection.query(
         `SELECT COALESCE(SUM(quantity), 0) AS total_stock 
          FROM inventory_batches 
-         WHERE product_id = ? AND quantity > 0`,
-        [product_id]
+         WHERE product_id = ? AND facility_id = ? AND quantity > 0`,
+        [product_id, targetFacility]
     );
 
     const systemStock = parseInt(sysStockRow.total_stock, 10);
@@ -337,9 +374,9 @@ async function processStockOpname(connection, { product_id, physical_stock, reas
     const opnameNumber = `OPN-${product_id}-${Date.now().toString().slice(-6)}`;
 
     const [opnameResult] = await connection.query(
-        `INSERT INTO stock_opname (opname_number, product_id, system_stock, physical_stock, difference, reason, performed_by, status)
-         VALUES (?, ?, ?, ?, ?, ?, ?, 'APPROVED')`,
-        [opnameNumber, product_id, systemStock, physical_stock, difference, reason, user_id || 1]
+        `INSERT INTO stock_opname (opname_number, product_id, facility_id, system_stock, physical_stock, difference, reason, performed_by, status)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'APPROVED')`,
+        [opnameNumber, product_id, targetFacility, systemStock, physical_stock, difference, reason, user_id || 1]
     );
 
     if (difference > 0) {
@@ -348,16 +385,16 @@ async function processStockOpname(connection, { product_id, physical_stock, reas
         const batchCode = `BTC-ADJ-${product_id}-${Date.now().toString().slice(-5)}`;
 
         const [adjBatch] = await connection.query(
-            `INSERT INTO inventory_batches (batch_code, product_id, initial_quantity, quantity, expired_date, received_date, notes)
-             VALUES (?, ?, ?, ?, ?, ?, ?)`,
-            [batchCode, product_id, difference, difference, nextYear, today, `[STOCK OPNAME SURPLUS] ${reason}`]
+            `INSERT INTO inventory_batches (batch_code, product_id, facility_id, initial_quantity, quantity, expired_date, received_date, notes)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+            [batchCode, product_id, targetFacility, difference, difference, nextYear, today, `[STOCK OPNAME SURPLUS] ${reason}`]
         );
 
         const refNo = generateReferenceNumber('ADJ');
         const [adjTrx] = await connection.query(
-            `INSERT INTO stock_transactions (reference_no, product_id, user_id, transaction_type, quantity, notes)
-             VALUES (?, ?, ?, 'ADJUSTMENT', ?, ?)`,
-            [refNo, product_id, user_id || 1, difference, `[OPNAME SURPLUS +${difference}] ${reason}`]
+            `INSERT INTO stock_transactions (reference_no, product_id, facility_id, user_id, transaction_type, quantity, notes)
+             VALUES (?, ?, ?, ?, 'ADJUSTMENT', ?, ?)`,
+            [refNo, product_id, targetFacility, user_id || 1, difference, `[OPNAME SURPLUS +${difference}] ${reason}`]
         );
 
         await connection.query(
@@ -368,21 +405,21 @@ async function processStockOpname(connection, { product_id, physical_stock, reas
         const qtyToReduce = Math.abs(difference);
 
         const [batches] = await connection.query(
-            `SELECT batch_id, batch_code, product_id, quantity, expired_date, received_date 
+            `SELECT batch_id, batch_code, product_id, facility_id, quantity, expired_date, received_date 
              FROM inventory_batches 
-             WHERE product_id = ? AND quantity > 0 
+             WHERE product_id = ? AND facility_id = ? AND quantity > 0 
              ORDER BY expired_date ASC, received_date ASC, batch_id ASC 
              FOR UPDATE`,
-            [product_id]
+            [product_id, targetFacility]
         );
 
         const { allocations } = allocateFefoBatches(batches, qtyToReduce);
 
         const refNo = generateReferenceNumber('ADJ');
         const [adjTrx] = await connection.query(
-            `INSERT INTO stock_transactions (reference_no, product_id, user_id, transaction_type, quantity, notes)
-             VALUES (?, ?, ?, 'ADJUSTMENT', ?, ?)`,
-            [refNo, product_id, user_id || 1, qtyToReduce, `[OPNAME DEFISIT -${qtyToReduce}] ${reason}`]
+            `INSERT INTO stock_transactions (reference_no, product_id, facility_id, user_id, transaction_type, quantity, notes)
+             VALUES (?, ?, ?, ?, 'ADJUSTMENT', ?, ?)`,
+            [refNo, product_id, targetFacility, user_id || 1, qtyToReduce, `[OPNAME DEFISIT -${qtyToReduce}] ${reason}`]
         );
 
         for (const alloc of allocations) {
@@ -402,6 +439,7 @@ async function processStockOpname(connection, { product_id, physical_stock, reas
         opname_id: opnameResult.insertId,
         opname_number: opnameNumber,
         product_name: products[0].product_name,
+        facility_id: targetFacility,
         system_stock: systemStock,
         physical_stock,
         difference,
