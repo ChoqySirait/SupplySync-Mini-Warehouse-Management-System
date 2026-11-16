@@ -51,6 +51,23 @@ async function ensureDatabaseAndMigrationTable(connection) {
             INDEX \`idx_migration_name\` (\`migration_name\`)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     `);
+
+    // 3. Pastikan skema dasar tabel WMS ada jika database baru/kosong
+    const [checkTables] = await connection.query(`
+        SELECT COUNT(*) AS total_tables 
+        FROM information_schema.TABLES 
+        WHERE TABLE_SCHEMA = ? AND TABLE_NAME IN ('products', 'warehouse_locations', 'users');
+    `, [database]);
+
+    if (checkTables[0].total_tables < 3) {
+        console.log('📦 Skema dasar belum terpasang. Menjalankan DDL non-destruktif database/schema.sql...');
+        const schemaPath = path.join(__dirname, 'schema.sql');
+        if (fs.existsSync(schemaPath)) {
+            const baseSql = fs.readFileSync(schemaPath, 'utf8');
+            await connection.query(baseSql);
+            console.log('✅ Skema dasar 16 tabel WMS berhasil diinisialisasi.');
+        }
+    }
 }
 
 async function getAppliedMigrations(connection) {
