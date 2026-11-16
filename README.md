@@ -9,7 +9,7 @@
 ![Vite](https://img.shields.io/badge/Vite-v6.0-646CFF?style=for-the-badge&logo=vite)
 ![MySQL](https://img.shields.io/badge/MySQL-v8.0%20InnoDB-blue?style=for-the-badge&logo=mysql)
 ![TailwindCSS](https://img.shields.io/badge/TailwindCSS-v3.4%20Local%20Build-38B2AC?style=for-the-badge&logo=tailwind-css)
-![Testing](https://img.shields.io/badge/Tests-134%20Passed%20(100%25)-success?style=for-the-badge)
+![Testing](https://img.shields.io/badge/Tests-139%20Passed%20(100%25)-success?style=for-the-badge)
 ![Security](https://img.shields.io/badge/Security-NIST%20scrypt%20%26%20RBAC-indigo?style=for-the-badge)
 
 ---
@@ -74,9 +74,10 @@ SupplySync-Mini-Warehouse-Management-System/
 │   ├── controllers/           # HTTP Request Controllers
 │   ├── middlewares/           # Auth, RBAC, Facility Scope, Rate Limiter, Validator
 │   ├── services/              # Domain Business Logic (Inventory, Order, Transfer)
-│   └── utils/                 # Security, RFC-4180 CSV, Backup, Stock Ledger
-├── tests/                     # 134 Automated Test Cases (Node Native Test Runner)
+│   └── utils/                 # Security, RFC-4180 CSV, Backup, Stock Ledger, DB Resilience
+├── tests/                     # 139 Automated Test Cases (Node Native Test Runner)
 │   ├── concurrency.test.js    # Simulasi SELECT FOR UPDATE & Antrian Transaksi
+│   ├── resilience.test.js     # Uji Deadlock & Lock Wait Auto-Retry Engine
 │   ├── e2e.test.js            # Uji Alur Penuh Siklus Bisnis Pergudangan
 │   └── ...                    # 27 Test Suites Lainnya
 └── docs/                      # Dokumentasi Teknis Komprehensif
@@ -134,6 +135,9 @@ npm run db:migrate
 
 # Periksa status migrasi yang telah diterapkan
 npm run db:migrate:status
+
+# Isi data sampel operasional realistis (Opsional untuk Uji Coba)
+npm run db:seed
 ```
 
 ### 5. Kompilasi Frontend & Menjalankan Aplikasi
@@ -146,11 +150,19 @@ npm start
 ```
 Buka peramban web Anda di `http://localhost:5000`.
 
+### 6. Kredensial Pengujian Bawaan (Default Accounts)
+
+| Role | Username | Password | Cakupan Hak Akses |
+| :--- | :--- | :--- | :--- |
+| **ADMIN** | `admin` | `Admin@SupplySync2026` | Seluruh Modul: User, Backup, Master Data, Mutasi, Multi-Gudang |
+| **MANAGER** | `manager` | `Manager@SupplySync2026` | Persetujuan PO, Laporan Kartu Stok, Reorder Alerts, Mutasi |
+| **STAFF** | `staff_gudang` | `Staff@SupplySync2026` | Penerimaan (GRN), FEFO Stock Out, Label Barcode, Stock Opname Fisik |
+
 ---
 
 ## 🧪 Pengujian Otomatis (Automated Testing)
 
-SupplySync dilengkapi dengan **134 pengujian otomatis terisolasi** yang mencakup seluruh lapisan sistem:
+SupplySync dilengkapi dengan **139 pengujian otomatis terisolasi** yang mencakup seluruh lapisan sistem:
 
 ```bash
 # Menjalankan seluruh test suite
@@ -159,9 +171,9 @@ npm test
 
 Hasil eksekusi:
 ```text
-ℹ tests 134
-ℹ suites 29
-ℹ pass 134
+ℹ tests 139
+ℹ suites 30
+ℹ pass 139
 ℹ fail 0
 ℹ duration_ms ~1000ms
 ```
