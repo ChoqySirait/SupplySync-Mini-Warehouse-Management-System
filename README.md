@@ -197,3 +197,7 @@ Untuk informasi lebih mendalam, silakan baca dokumentasi teknis pada direktori `
 ## ⚖️ Lisensi
 
 Proyek ini dilisensikan di bawah lisensi **ISC**. Dikembangkan oleh **SupplySync Engineering Team**.
+
+## Note
+
+Proyek ini menggunakan AI sebagai Alat Bantu, Ide nya Berasal dari saya Sepenuhnya.
